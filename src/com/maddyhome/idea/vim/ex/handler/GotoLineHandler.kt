@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,12 +22,15 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.ex.*
+import com.maddyhome.idea.vim.ex.CommandHandler
+import com.maddyhome.idea.vim.ex.CommandHandler.Access.READ_ONLY
+import com.maddyhome.idea.vim.ex.CommandHandler.ArgumentFlag.ARGUMENT_OPTIONAL
+import com.maddyhome.idea.vim.ex.CommandHandler.RangeFlag.RANGE_REQUIRED
+import com.maddyhome.idea.vim.ex.CommandHandlerFlags
+import com.maddyhome.idea.vim.ex.ExCommand
+import com.maddyhome.idea.vim.ex.flags
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.helper.EditorHelper
-import com.maddyhome.idea.vim.helper.enumSetOf
-import java.util.*
 import kotlin.math.min
 
 /**
@@ -35,9 +38,7 @@ import kotlin.math.min
  * range.
  */
 class GotoLineHandler : CommandHandler.ForEachCaret() {
-  override val names: Array<CommandName> = arrayOf()
-  override val argFlags: CommandHandlerFlags = flags(RangeFlag.RANGE_REQUIRED, ArgumentFlag.ARGUMENT_OPTIONAL, Access.READ_ONLY)
-  override val optFlags: EnumSet<CommandFlags> = enumSetOf(CommandFlags.FLAG_MOT_EXCLUSIVE)
+  override val argFlags: CommandHandlerFlags = flags(RANGE_REQUIRED, ARGUMENT_OPTIONAL, READ_ONLY)
 
   /**
    * Moves the cursor to the line entered by the user
@@ -49,10 +50,11 @@ class GotoLineHandler : CommandHandler.ForEachCaret() {
    * @return True if able to perform the command, false if not
    */
   override fun execute(editor: Editor, caret: Caret, context: DataContext, cmd: ExCommand): Boolean {
-    val line = min(cmd.getLine(editor, caret, context), EditorHelper.getLineCount(editor) - 1)
+    val line = min(cmd.getLine(editor, caret), EditorHelper.getLineCount(editor) - 1)
 
     if (line >= 0) {
-      MotionGroup.moveCaret(editor, caret, VimPlugin.getMotion().moveCaretToLineStartSkipLeading(editor, line))
+      val offset = VimPlugin.getMotion().moveCaretToLineWithStartOfLineOption(editor, line, caret)
+      MotionGroup.moveCaret(editor, caret, offset)
       return true
     }
 

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,10 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
 import com.maddyhome.idea.vim.option.OptionsManager
-import com.maddyhome.idea.vim.ui.ExDocument
-import com.maddyhome.idea.vim.ui.ExEntryPanel
+import com.maddyhome.idea.vim.ui.ex.ExDocument
+import com.maddyhome.idea.vim.ui.ex.ExEntryPanel
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 import java.awt.event.KeyEvent
 import javax.swing.KeyStroke
@@ -234,6 +236,7 @@ class ExEntryTest : VimTestCase() {
     assertExText("set digraph")
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.CMD)
   fun `test matching command history`() {
     typeExInput(":set digraph<CR>")
     typeExInput(":digraph<CR>")
@@ -477,6 +480,7 @@ class ExEntryTest : VimTestCase() {
     assertExOffset(1)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.DIFFERENT)
   fun `test prompt while inserting literal character`() {
     typeExInput(":<C-V>")
     assertExText("^")
@@ -517,7 +521,7 @@ class ExEntryTest : VimTestCase() {
 
     typeExInput(":set<Home><C-R>c")
     assertExText("hello worldset")
-    assertExOffset(11)  // Just before 'set'
+    assertExOffset(11) // Just before 'set'
 
     // TODO: Test caret feedback
     // Vim shows " after hitting <C-R>
@@ -550,9 +554,39 @@ class ExEntryTest : VimTestCase() {
     assertExText("hello")
   }
 
+  fun `test cmap`() {
+    typeExInput(":cmap x z<CR>")
+    typeExInput(":cnoremap w z<CR>")
+    typeExInput(":cmap z y<CR>")
+    typeExInput(":z")
+    assertExText("y")
+    deactivateExEntry()
+
+    typeExInput(":x")
+    assertExText("y")
+    deactivateExEntry()
+
+    typeExInput(":w")
+    assertExText("z")
+  }
+
+  fun `test cmap Ctrl`() {
+    typeExInput(":cmap \\<C-B> b<CR>")
+    typeExInput(":<C-B>")
+    assertExText("b")
+    deactivateExEntry()
+
+    VimPlugin.getRegister().setKeys('e', StringHelper.parseKeys("hello world"))
+    typeExInput(":cmap d \\<C-R><CR>")
+    typeExInput(":de")
+    assertExText("hello world")
+  }
+
   private fun typeExInput(text: String) {
-    assertTrue("Ex command must start with ':', '/' or '?'",
-      text.startsWith(":") || text.startsWith('/') || text.startsWith('?'))
+    assertTrue(
+      "Ex command must start with ':', '/' or '?'",
+      text.startsWith(":") || text.startsWith('/') || text.startsWith('?')
+    )
 
     val keys = mutableListOf<KeyStroke>()
     StringHelper.parseKeys(text).forEach {

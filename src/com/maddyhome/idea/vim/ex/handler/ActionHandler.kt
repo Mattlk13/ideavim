@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,15 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.ex.*
+import com.maddyhome.idea.vim.ex.CommandHandler
+import com.maddyhome.idea.vim.ex.CommandHandler.Access.READ_ONLY
+import com.maddyhome.idea.vim.ex.CommandHandler.ArgumentFlag.ARGUMENT_OPTIONAL
 import com.maddyhome.idea.vim.ex.CommandHandler.Flag.SAVE_VISUAL
+import com.maddyhome.idea.vim.ex.CommandHandler.RangeFlag.RANGE_OPTIONAL
+import com.maddyhome.idea.vim.ex.CommandHandlerFlags
+import com.maddyhome.idea.vim.ex.ExCommand
+import com.maddyhome.idea.vim.ex.flags
+import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.helper.runAfterGotFocus
 
 /**
@@ -34,20 +41,19 @@ import com.maddyhome.idea.vim.helper.runAfterGotFocus
  */
 class ActionHandler : CommandHandler.SingleExecution() {
 
-  override val names = commands("action")
-  override val argFlags: CommandHandlerFlags = flags(RangeFlag.RANGE_OPTIONAL, ArgumentFlag.ARGUMENT_OPTIONAL, Access.READ_ONLY, SAVE_VISUAL)
+  override val argFlags: CommandHandlerFlags = flags(RANGE_OPTIONAL, ARGUMENT_OPTIONAL, READ_ONLY, SAVE_VISUAL)
 
   override fun execute(editor: Editor, context: DataContext, cmd: ExCommand): Boolean {
     val actionName = cmd.argument.trim()
     val action = ActionManager.getInstance().getAction(actionName) ?: run {
-      VimPlugin.showMessage("Action not found: $actionName")
+      VimPlugin.showMessage(MessageHelper.message("action.not.found.0", actionName))
       return false
     }
     val application = ApplicationManager.getApplication()
     if (application.isUnitTestMode) {
       executeAction(action, context)
     } else {
-      runAfterGotFocus(Runnable { executeAction(action, context) })
+      runAfterGotFocus { executeAction(action, context) }
     }
     return true
   }

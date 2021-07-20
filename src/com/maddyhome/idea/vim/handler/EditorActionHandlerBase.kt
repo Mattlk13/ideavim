@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,105 +18,105 @@
 
 package com.maddyhome.idea.vim.handler
 
+import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.actionSystem.EditorActionHandler
+import com.intellij.openapi.editor.actionSystem.CaretSpecificDataContext
 import com.maddyhome.idea.vim.VimPlugin
+import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
-import com.maddyhome.idea.vim.command.CommandState
+import com.maddyhome.idea.vim.command.CommandFlags
+import com.maddyhome.idea.vim.helper.StringHelper
+import com.maddyhome.idea.vim.helper.commandState
 import com.maddyhome.idea.vim.helper.getTopLevelEditor
+import com.maddyhome.idea.vim.helper.noneOfEnum
+import org.jetbrains.annotations.NonNls
+import java.util.*
+import javax.swing.KeyStroke
 
 /**
- * Structure of handlers
- * `~` - this symbol means that this handler cannot be used directly (only its children)
- * Almost each handler isn't usable by itself and has two children - "SingleExecution" and "ForEachCaret"
- *      which should be used
+ * All the commands in IdeaVim should implement one of the following handlers and be registered in VimActions.xml
+ * Check the KtDocs of handlers for the details.
  *
- *                                         ~ EditorActionHandlerBase ~
- *                                                     |
- *               ----------------------------------------------------------------------------
- *                 |                                   |                                    |
- *          ~ ForEachCaret ~                   ~ SingleExecution ~                  ~ VimActionHandler ~
- *                 |                                   |                                /         \
- *       TextObjectActionHandler               MotionActionHandler                    /            \
- *                                                                             SingleExecution   ForEachCaret
- *                                                                                  |
- *                      -------------------------------------------------------------
- *                      |                                   |
- *        ~ ChangeEditorActionHandler ~         ~ VisualOperatorActionHandler ~
- *              /           \                         /         \
- *    SingleExecution    ForEachCaret         SingleExecution    ForEachCaret
+ * Structure of handlers:
  *
+ * - [EditorActionHandlerBase]: Base handler for all handlers. Please don't use it directly.
+ *  - [VimActionHandler]: .............. Common vim commands.. E.g.: u, <C-W>s, <C-D>.
+ *  - [TextObjectActionHandler]: ....... Text objects. ....... E.g.: iw, a(, i>
+ *  - [MotionActionHandler]: ........... Motion commands. .... E.g.: k, w, <Up>
+ *  - [ChangeEditorActionHandler]: ..... Change commands. .... E.g.: s, r, gU
+ *  - [VisualOperatorActionHandler]: ... Visual commands.
+ *  - [IdeActionHandler]: .............. Commands handled by existing IDE actions.
  *
  *  SpecialKeyHandlers are not presented here because these handlers are created to a limited set of commands and they
- *    are already implemented
- *
- * See also VimCommands.kt for commands structure
+ *    are already implemented.
  */
+abstract class EditorActionHandlerBase(private val myRunForEachCaret: Boolean) {
+  val id: String = getActionId(this::class.java.name)
 
-/**
- * Handler for common usage
- */
-sealed class VimActionHandler(myRunForEachCaret: Boolean) : EditorActionHandlerBase(myRunForEachCaret) {
-  abstract class ForEachCaret : VimActionHandler(true) {
-    abstract fun execute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean
-  }
+  abstract val type: Command.Type
 
-  abstract class SingleExecution : VimActionHandler(false) {
-    abstract fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean
-  }
+  open val argumentType: Argument.Type? = null
 
-  override fun baseExecute(editor: Editor, caret: Caret?, context: DataContext, cmd: Command): Boolean {
-    return when (this) {
-      is ForEachCaret -> caret == null || execute(editor, caret, context, cmd)
-      is SingleExecution -> execute(editor, context, cmd)
-    }
-  }
-}
+  /**
+   * Returns various binary flags for the command.
+   *
+   * These legacy flags will be refactored in future releases.
+   *
+   * @see com.maddyhome.idea.vim.command.Command
+   */
+  open val flags: EnumSet<CommandFlags> = noneOfEnum()
 
-sealed class EditorActionHandlerBase(myRunForEachCaret: Boolean) : EditorActionHandler(myRunForEachCaret) {
+  abstract fun baseExecute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean
 
-  abstract class ForEachCaret : EditorActionHandlerBase(true) {
-    abstract fun execute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean
-
-    final override fun baseExecute(editor: Editor, caret: Caret?, context: DataContext, cmd: Command): Boolean {
-      if (caret == null) return false
-      return execute(editor, caret, context, cmd)
+  fun execute(editor: Editor, context: DataContext) {
+    val hostEditor: Editor = CommonDataKeys.HOST_EDITOR.getData(context) ?: editor
+    val action = { caret: Caret -> doExecute(editor, caret, context) }
+    if (myRunForEachCaret) {
+      hostEditor.caretModel.runForEachCaret(action)
+    } else {
+      action(editor.caretModel.currentCaret)
     }
   }
 
-  abstract class SingleExecution : EditorActionHandlerBase(false) {
-    abstract fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean
-
-    final override fun baseExecute(editor: Editor, caret: Caret?, context: DataContext, cmd: Command): Boolean {
-      return execute(editor, context, cmd)
-    }
-  }
-
-  abstract fun baseExecute(editor: Editor, caret: Caret?, context: DataContext, cmd: Command): Boolean
-
-  public final override fun doExecute(_editor: Editor, caret: Caret?, context: DataContext) {
+  private fun doExecute(editor: Editor, caret: Caret, context: DataContext) {
     if (!VimPlugin.isEnabled()) return
 
-    val editor = _editor.getTopLevelEditor()
+    val topLevelEditor = editor.getTopLevelEditor()
     logger.debug("Execute command with handler: " + this.javaClass.name)
 
-    val state = CommandState.getInstance(editor)
-    val cmd = state.command ?: run {
+    val cmd = topLevelEditor.commandState.executingCommand ?: run {
       VimPlugin.indicateError()
       return
     }
 
-    if (!baseExecute(editor, caret, context, cmd)) VimPlugin.indicateError()
+    if (!baseExecute(topLevelEditor, caret, CaretSpecificDataContext(context, caret), cmd)) VimPlugin.indicateError()
   }
 
   open fun process(cmd: Command) {
     // No-op
   }
 
-  private companion object {
+  companion object {
     private val logger = Logger.getInstance(EditorActionHandlerBase::class.java.name)
+
+    fun parseKeysSet(keyStrings: List<String>) = keyStrings.map { StringHelper.parseKeys(it) }.toSet()
+
+    @JvmStatic
+    fun parseKeysSet(@NonNls vararg keyStrings: String): Set<List<KeyStroke>> = List(keyStrings.size) {
+      StringHelper.parseKeys(keyStrings[it])
+    }.toSet()
+
+    @NonNls
+    private const val VimActionPrefix = "Vim"
+
+    @NonNls
+    fun getActionId(classFullName: String): String {
+      return classFullName
+        .takeLastWhile { it != '.' }
+        .let { if (it.startsWith(VimActionPrefix, true)) it else "$VimActionPrefix$it" }
+    }
   }
 }

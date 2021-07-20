@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,48 +22,52 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.action.MotionEditorAction
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.command.MappingMode
+import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.handler.Motion
 import com.maddyhome.idea.vim.handler.MotionActionHandler
+import com.maddyhome.idea.vim.handler.toMotionOrError
 import java.util.*
-import javax.swing.KeyStroke
 
-class MotionGotoMarkLineAction : MotionEditorAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.N
-
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("'")
+class MotionGotoMarkLineAction : MotionActionHandler.ForEachCaret() {
+  override val motionType: MotionType = MotionType.LINE_WISE
 
   override val argumentType: Argument.Type = Argument.Type.CHARACTER
 
-  override val flags: EnumSet<CommandFlags> = EnumSet.of(CommandFlags.FLAG_MOT_LINEWISE, CommandFlags.FLAG_SAVE_JUMP)
+  override val flags: EnumSet<CommandFlags> = EnumSet.of(CommandFlags.FLAG_SAVE_JUMP)
 
-  override fun makeActionHandler(): MotionActionHandler = MotionGotoMarkLineActionHandler
-}
-
-class MotionGotoMarkLineNoSaveJumpAction : MotionEditorAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.N
-
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("g'")
-
-  override val argumentType: Argument.Type = Argument.Type.CHARACTER
-
-  override val flags: EnumSet<CommandFlags> = EnumSet.of(CommandFlags.FLAG_MOT_LINEWISE)
-
-  override fun makeActionHandler(): MotionActionHandler = MotionGotoMarkLineActionHandler
-}
-
-private object MotionGotoMarkLineActionHandler : MotionActionHandler.ForEachCaret() {
-  override fun getOffset(editor: Editor,
-                         caret: Caret,
-                         context: DataContext,
-                         count: Int,
-                         rawCount: Int,
-                         argument: Argument?): Int {
-    if (argument == null) return -1
+  override fun getOffset(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): Motion {
+    if (argument == null) return Motion.Error
 
     val mark = argument.character
-    return VimPlugin.getMotion().moveCaretToMark(editor, mark, true)
+    return VimPlugin.getMotion().moveCaretToMark(editor, mark, true).toMotionOrError()
+  }
+}
+
+class MotionGotoMarkLineNoSaveJumpAction : MotionActionHandler.ForEachCaret() {
+  override val motionType: MotionType = MotionType.LINE_WISE
+
+  override val argumentType: Argument.Type = Argument.Type.CHARACTER
+
+  override fun getOffset(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): Motion {
+    if (argument == null) return Motion.Error
+
+    val mark = argument.character
+    return VimPlugin.getMotion().moveCaretToMark(editor, mark, true).toMotionOrError()
   }
 }

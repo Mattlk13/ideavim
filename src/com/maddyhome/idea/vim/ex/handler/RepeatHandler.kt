@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,13 +22,18 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.ex.*
+import com.maddyhome.idea.vim.ex.CommandHandler
 import com.maddyhome.idea.vim.ex.CommandHandler.Flag.DONT_SAVE_LAST
+import com.maddyhome.idea.vim.ex.CommandHandlerFlags
+import com.maddyhome.idea.vim.ex.CommandParser
+import com.maddyhome.idea.vim.ex.ExCommand
+import com.maddyhome.idea.vim.ex.ExException
+import com.maddyhome.idea.vim.ex.flags
 import com.maddyhome.idea.vim.group.MotionGroup
 
 class RepeatHandler : CommandHandler.ForEachCaret() {
-  override val names: Array<CommandName> = commands("@")
-  override val argFlags: CommandHandlerFlags = flags(RangeFlag.RANGE_OPTIONAL, ArgumentFlag.ARGUMENT_REQUIRED, Access.SELF_SYNCHRONIZED, DONT_SAVE_LAST)
+  override val argFlags: CommandHandlerFlags =
+    flags(RangeFlag.RANGE_OPTIONAL, ArgumentFlag.ARGUMENT_REQUIRED, Access.SELF_SYNCHRONIZED, DONT_SAVE_LAST)
 
   private var lastArg = ':'
 
@@ -38,17 +43,21 @@ class RepeatHandler : CommandHandler.ForEachCaret() {
     if (arg == '@') arg = lastArg
     lastArg = arg
 
-    val line = cmd.getLine(editor, caret, context)
-    MotionGroup.moveCaret(editor, caret, VimPlugin.getMotion().moveCaretToLine(editor, line, editor.caretModel.primaryCaret))
+    val line = cmd.getLine(editor, caret)
+    MotionGroup.moveCaret(
+      editor,
+      caret,
+      VimPlugin.getMotion().moveCaretToLineWithSameColumn(editor, line, editor.caretModel.primaryCaret)
+    )
 
     if (arg == ':') {
-      return CommandParser.getInstance().processLastCommand(editor, context, 1)
+      return CommandParser.processLastCommand(editor, context, 1)
     }
 
     val reg = VimPlugin.getRegister().getPlaybackRegister(arg) ?: return false
     val text = reg.text ?: return false
 
-    CommandParser.getInstance().processCommand(editor, context, text, 1)
+    CommandParser.processCommand(editor, context, text, 1)
     return true
   }
 }

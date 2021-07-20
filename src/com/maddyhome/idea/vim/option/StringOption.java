@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,10 @@ import org.jetbrains.annotations.NotNull;
  * An option that has an arbitrary string value
  */
 public class StringOption extends TextOption {
+  private final String dflt;
+
+  protected String value;
+
   /**
    * Creates the string option
    *
@@ -55,8 +59,9 @@ public class StringOption extends TextOption {
    */
   @Override
   public boolean set(String val) {
+    String oldValue = getValue();
     value = val;
-    fireOptionChangeEvent();
+    fireOptionChangeEvent(oldValue, getValue());
 
     return true;
   }
@@ -69,8 +74,9 @@ public class StringOption extends TextOption {
    */
   @Override
   public boolean append(String val) {
+    String oldValue = getValue();
     value += val;
-    fireOptionChangeEvent();
+    fireOptionChangeEvent(oldValue, getValue());
 
     return true;
   }
@@ -83,8 +89,9 @@ public class StringOption extends TextOption {
    */
   @Override
   public boolean prepend(String val) {
+    String oldValue = getValue();
     value = val + value;
-    fireOptionChangeEvent();
+    fireOptionChangeEvent(oldValue, getValue());
 
     return true;
   }
@@ -99,8 +106,9 @@ public class StringOption extends TextOption {
   public boolean remove(@NotNull String val) {
     int pos = value.indexOf(val);
     if (pos != -1) {
+      String oldValue = getValue();
       value = value.substring(0, pos) + value.substring(pos + val.length());
-      fireOptionChangeEvent();
+      fireOptionChangeEvent(oldValue, getValue());
 
       return true;
     }
@@ -115,7 +123,7 @@ public class StringOption extends TextOption {
    */
   @Override
   public boolean isDefault() {
-    return dflt.equals(value);
+    return getDefaultValue().equals(value);
   }
 
   /**
@@ -123,9 +131,10 @@ public class StringOption extends TextOption {
    */
   @Override
   public void resetDefault() {
-    if (!dflt.equals(value)) {
-      value = dflt;
-      fireOptionChangeEvent();
+    if (!getDefaultValue().equals(value)) {
+      String oldValue = getValue();
+      value = getDefaultValue();
+      fireOptionChangeEvent(oldValue, getValue());
     }
   }
 
@@ -134,12 +143,11 @@ public class StringOption extends TextOption {
    *
    * @return The option as a string for display
    */
-  @NotNull
-  public String toString() {
-
+  public @NotNull String toString() {
     return "  " + getName() + "=" + value;
   }
 
-  protected final String dflt;
-  protected String value;
+  protected @NotNull String getDefaultValue() {
+    return dflt;
+  }
 }

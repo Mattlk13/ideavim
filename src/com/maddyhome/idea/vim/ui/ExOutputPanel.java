@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,10 +26,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.util.IJSwingUtilities;
 import com.maddyhome.idea.vim.VimPlugin;
-import com.maddyhome.idea.vim.helper.EditorDataContext;
-import com.maddyhome.idea.vim.helper.UiHelper;
-import com.maddyhome.idea.vim.helper.UserDataManager;
+import com.maddyhome.idea.vim.helper.*;
 import com.maddyhome.idea.vim.option.OptionsManager;
+import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -45,19 +44,19 @@ import java.util.List;
 /**
  * This panel displays text in a <code>more</code> like window.
  */
-public class ExOutputPanel extends JPanel implements LafManagerListener {
-  @NotNull private final Editor myEditor;
+public class ExOutputPanel extends JPanel {
+  private final @NotNull Editor myEditor;
 
-  @NotNull private final JLabel myLabel = new JLabel("more");
-  @NotNull private final JTextArea myText = new JTextArea();
-  @NotNull private final JScrollPane myScrollPane =
+  private final @NotNull JLabel myLabel = new JLabel("more");
+  private final @NotNull JTextArea myText = new JTextArea();
+  private final @NotNull JScrollPane myScrollPane =
     new JBScrollPane(myText, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-  @NotNull private final ComponentAdapter myAdapter;
+  private final @NotNull ComponentAdapter myAdapter;
   private boolean myAtEnd = false;
   private int myLineHeight = 0;
 
-  @Nullable private JComponent myOldGlass = null;
-  @Nullable private LayoutManager myOldLayout = null;
+  private @Nullable JComponent myOldGlass = null;
+  private @Nullable LayoutManager myOldLayout = null;
   private boolean myWasOpaque = false;
 
   private boolean myActive = false;
@@ -85,16 +84,14 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
     addKeyListener(moreKeyListener);
     myText.addKeyListener(moreKeyListener);
 
-    final Project project = editor.getProject();
-    if (project != null) {
-      LafManager.getInstance().addLafManagerListener(this, project);
-    }
-
     updateUI();
   }
 
-  @NotNull
-  public static ExOutputPanel getInstance(@NotNull Editor editor) {
+  public static boolean isPanelActive(@NotNull Editor editor) {
+    return UserDataManager.getVimMorePanel(editor) != null;
+  }
+
+  public static @NotNull ExOutputPanel getInstance(@NotNull Editor editor) {
     ExOutputPanel panel = UserDataManager.getVimMorePanel(editor);
     if (panel == null) {
       panel = new ExOutputPanel(editor);
@@ -103,10 +100,22 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
     return panel;
   }
 
-  @Override
-  public void lookAndFeelChanged(@NotNull LafManager source) {
-    // Calls updateUI on this and child components
-    IJSwingUtilities.updateComponentTreeUI(this);
+  private static int countLines(@NotNull String text) {
+    if (text.length() == 0) {
+      return 0;
+    }
+
+    int count = 0;
+    int pos = -1;
+    while ((pos = text.indexOf('\n', pos + 1)) != -1) {
+      count++;
+    }
+
+    if (text.charAt(text.length() - 1) != '\n') {
+      count++;
+    }
+
+    return count;
   }
 
   // Called automatically when the LAF is changed and the component is visible, and manually by the LAF listener handler
@@ -126,12 +135,13 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
     }
   }
 
-  public void setText(@NotNull String data) {
+  public void setText(@NotNull @Nls(capitalization = Nls.Capitalization.Sentence) String data) {
     if (data.length() > 0 && data.charAt(data.length() - 1) == '\n') {
       data = data.substring(0, data.length() - 1);
     }
 
     myText.setText(data);
+    myText.setFont(UiHelper.selectFont(data));
     myText.setCaretPosition(0);
     if (data.length() > 0) {
       activate();
@@ -196,27 +206,8 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
   }
 
   private void setFontForElements() {
-    final Font font = UiHelper.getEditorFont();
-    myText.setFont(font);
-    myLabel.setFont(font);
-  }
-
-  private static int countLines(@NotNull String text) {
-    if (text.length() == 0) {
-      return 0;
-    }
-
-    int count = 0;
-    int pos = -1;
-    while ((pos = text.indexOf('\n', pos + 1)) != -1) {
-      count++;
-    }
-
-    if (text.charAt(text.length() - 1) != '\n') {
-      count++;
-    }
-
-    return count;
+    myText.setFont(UiHelper.selectFont(myText.getText()));
+    myLabel.setFont(UiHelper.selectFont(myLabel.getText()));
   }
 
   private void scrollLine() {
@@ -243,7 +234,8 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
   }
 
   private void badKey() {
-    myLabel.setText("-- MORE -- (RET: line, SPACE: page, d: half page, q: quit)");
+    myLabel.setText(MessageHelper.message("more.ret.line.space.page.d.half.page.q.quit"));
+    myLabel.setFont(UiHelper.selectFont(myLabel.getText()));
   }
 
   private void scrollOffset(int more) {
@@ -254,11 +246,12 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
     if (val + more >=
         myScrollPane.getVerticalScrollBar().getMaximum() - myScrollPane.getVerticalScrollBar().getVisibleAmount()) {
       myAtEnd = true;
-      myLabel.setText("Hit ENTER or type command to continue");
+      myLabel.setText(MessageHelper.message("hit.enter.or.type.command.to.continue"));
     }
     else {
-      myLabel.setText("-- MORE --");
+      myLabel.setText(MessageHelper.message("ex.output.panel.more"));
     }
+    myLabel.setFont(UiHelper.selectFont(myLabel.getText()));
   }
 
   private void positionPanel() {
@@ -296,7 +289,7 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
     close(null);
   }
 
-  private void close(@Nullable final KeyEvent e) {
+  private void close(final @Nullable KeyEvent e) {
     ApplicationManager.getApplication().invokeLater(() -> {
       deactivate(true);
 
@@ -306,7 +299,7 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
         final KeyStroke key = KeyStroke.getKeyStrokeForEvent(e);
         final List<KeyStroke> keys = new ArrayList<>(1);
         keys.add(key);
-        VimPlugin.getMacro().playbackKeys(myEditor, new EditorDataContext(myEditor), project, keys, 0, 0, 1);
+        VimPlugin.getMacro().playbackKeys(myEditor, EditorDataContext.init(myEditor, null), project, keys, 0, 0, 1);
       }
     });
   }
@@ -335,13 +328,11 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
             myExOutputPanel.scrollHalfPage();
             break;
           case 'q':
+          case '\u001b':
             myExOutputPanel.close();
             break;
           case '\n':
             myExOutputPanel.handleEnter();
-            break;
-          case '\u001b':
-            myExOutputPanel.close();
             break;
           case KeyEvent.CHAR_UNDEFINED: {
             switch (e.getKeyCode()) {
@@ -358,6 +349,18 @@ public class ExOutputPanel extends JPanel implements LafManagerListener {
           default:
             myExOutputPanel.badKey();
         }
+      }
+    }
+  }
+
+  public static class LafListener implements LafManagerListener {
+    @Override
+    public void lookAndFeelChanged(@NotNull LafManager source) {
+      if (!VimPlugin.isEnabled()) return;
+      // Calls updateUI on this and child components
+      for (Editor editor : HelperKt.localEditors()) {
+        if (!ExOutputPanel.isPanelActive(editor)) continue;
+        IJSwingUtilities.updateComponentTreeUI(ExOutputPanel.getInstance(editor));
       }
     }
   }

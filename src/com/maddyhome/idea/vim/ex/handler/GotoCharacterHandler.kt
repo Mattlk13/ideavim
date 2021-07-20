@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,19 +22,20 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.ex.*
+import com.maddyhome.idea.vim.ex.CommandHandler
+import com.maddyhome.idea.vim.ex.CommandHandler.Access.READ_ONLY
+import com.maddyhome.idea.vim.ex.CommandHandler.ArgumentFlag.ARGUMENT_OPTIONAL
+import com.maddyhome.idea.vim.ex.CommandHandler.RangeFlag.RANGE_IS_COUNT
+import com.maddyhome.idea.vim.ex.CommandHandlerFlags
+import com.maddyhome.idea.vim.ex.ExCommand
+import com.maddyhome.idea.vim.ex.flags
 import com.maddyhome.idea.vim.group.MotionGroup
-import com.maddyhome.idea.vim.helper.enumSetOf
-import java.util.*
 
 class GotoCharacterHandler : CommandHandler.ForEachCaret() {
-  override val names: Array<CommandName> = commands("go[to]")
-  override val argFlags: CommandHandlerFlags = flags(RangeFlag.RANGE_IS_COUNT, ArgumentFlag.ARGUMENT_OPTIONAL, Access.READ_ONLY)
-  override val optFlags: EnumSet<CommandFlags> = enumSetOf(CommandFlags.FLAG_MOT_EXCLUSIVE)
+  override val argFlags: CommandHandlerFlags = flags(RANGE_IS_COUNT, ARGUMENT_OPTIONAL, READ_ONLY)
 
   override fun execute(editor: Editor, caret: Caret, context: DataContext, cmd: ExCommand): Boolean {
-    val count = cmd.getCount(editor, caret, context, 1, true)
+    val count = cmd.getCount(editor, caret, 1, true)
     if (count <= 0) return false
 
     val offset = VimPlugin.getMotion().moveCaretToNthCharacter(editor, count - 1)

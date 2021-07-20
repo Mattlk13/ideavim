@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,14 +20,18 @@ package com.maddyhome.idea.vim.helper;
 
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.editor.*;
+import com.intellij.openapi.editor.ex.util.EditorUtil;
 import com.intellij.openapi.editor.impl.EditorImpl;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.testFramework.LightVirtualFile;
 import com.maddyhome.idea.vim.common.IndentConfig;
 import com.maddyhome.idea.vim.common.TextRange;
+import com.maddyhome.idea.vim.ui.ex.ExEntryPanel;
+import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Range;
 
 import java.awt.*;
 import java.nio.CharBuffer;
@@ -35,24 +39,60 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import static java.lang.Integer.max;
+import static java.lang.Integer.min;
+
 /**
  * This is a set of helper methods for working with editors. All line and column values are zero based.
  */
 public class EditorHelper {
-  public static int getVisualLineAtTopOfScreen(@NotNull final Editor editor) {
-    final Rectangle visibleArea = editor.getScrollingModel().getVisibleArea();
+  // Set a max height on block inlays to be made visible at the top/bottom of a line when scrolling up/down. This
+  // mitigates the visible area bouncing around too much and even pushing the cursor line off screen with large
+  // multiline rendered doc comments, while still providing some visibility of the block inlay (e.g. Rider's single line
+  // Code Vision)
+  private static final int BLOCK_INLAY_MAX_LINE_HEIGHT = 3;
+
+  public static @NotNull Rectangle getVisibleArea(final @NotNull Editor editor) {
+    return editor.getScrollingModel().getVisibleAreaOnScrollingFinished();
+  }
+
+  public static boolean scrollVertically(@NotNull Editor editor, int verticalOffset) {
+    final ScrollingModel scrollingModel = editor.getScrollingModel();
+    final Rectangle area = scrollingModel.getVisibleAreaOnScrollingFinished();
+    scrollingModel.scroll(area.x, verticalOffset);
+    return scrollingModel.getVisibleAreaOnScrollingFinished().y != area.y;
+  }
+
+  public static void scrollHorizontally(@NotNull Editor editor, int horizontalOffset) {
+    final ScrollingModel scrollingModel = editor.getScrollingModel();
+    final Rectangle area = scrollingModel.getVisibleAreaOnScrollingFinished();
+    scrollingModel.scroll(horizontalOffset, area.y);
+  }
+
+  public static int getVisualLineAtTopOfScreen(final @NotNull Editor editor) {
+    final Rectangle visibleArea = getVisibleArea(editor);
     return getFullVisualLine(editor, visibleArea.y, visibleArea.y, visibleArea.y + visibleArea.height);
   }
 
-  public static int getVisualLineAtMiddleOfScreen(@NotNull final Editor editor) {
-    final ScrollingModel scrollingModel = editor.getScrollingModel();
-    final Rectangle visibleArea = scrollingModel.getVisibleArea();
-    return editor.yToVisualLine(visibleArea.y + (visibleArea.height / 2));
+  public static int getVisualLineAtMiddleOfScreen(final @NotNull Editor editor) {
+    // The editor will return line numbers of virtual space if the text doesn't reach the end of the visible area
+    // (either because it's too short, or it's been scrolled up)
+    final int lastLineBaseline = editor.logicalPositionToXY(new LogicalPosition(getLineCount(editor), 0)).y;
+    final Rectangle visibleArea = getVisibleArea(editor);
+    final int height = min(lastLineBaseline - visibleArea.y, visibleArea.height);
+    return editor.yToVisualLine(visibleArea.y + (height / 2));
   }
 
-  public static int getVisualLineAtBottomOfScreen(@NotNull final Editor editor) {
-    final Rectangle visibleArea = editor.getScrollingModel().getVisibleArea();
-    return getFullVisualLine(editor, visibleArea.y + visibleArea.height, visibleArea.y, visibleArea.y + visibleArea.height);
+  public static int getNonNormalizedVisualLineAtBottomOfScreen(final @NotNull Editor editor) {
+    // The editor will return line numbers of virtual space if the text doesn't reach the end of the visible area
+    // (either because it's too short, or it's been scrolled up)
+    final Rectangle visibleArea = getVisibleArea(editor);
+    return getFullVisualLine(editor, visibleArea.y + visibleArea.height, visibleArea.y,
+                             visibleArea.y + visibleArea.height);
+  }
+
+  public static int getVisualLineAtBottomOfScreen(final @NotNull Editor editor) {
+    return normalizeVisualLine(editor, getNonNormalizedVisualLineAtBottomOfScreen(editor));
   }
 
   /**
@@ -62,7 +102,7 @@ public class EditorHelper {
    * @param editor The editor
    * @return The number of characters in the current line
    */
-  public static int getLineLength(@NotNull final Editor editor) {
+  public static int getLineLength(final @NotNull Editor editor) {
     return getLineLength(editor, editor.getCaretModel().getLogicalPosition().line);
   }
 
@@ -70,16 +110,16 @@ public class EditorHelper {
    * Gets the number of characters on the specified logical line. This will be different than the number of visual
    * characters if there are "real" tabs in the line.
    *
-   * @param editor The editor
-   * @param line   The logical line within the file
+   * @param editor      The editor
+   * @param logicalLine The logical line within the file
    * @return The number of characters in the specified line
    */
-  public static int getLineLength(@NotNull final Editor editor, final int line) {
+  public static int getLineLength(final @NotNull Editor editor, final int logicalLine) {
     if (getLineCount(editor) == 0) {
       return 0;
     }
     else {
-      return Math.max(0, editor.offsetToLogicalPosition(editor.getDocument().getLineEndOffset(line)).column);
+      return Math.max(0, editor.offsetToLogicalPosition(editor.getDocument().getLineEndOffset(logicalLine)).column);
     }
   }
 
@@ -91,7 +131,7 @@ public class EditorHelper {
    * @param line   The visual line within the file
    * @return The number of characters in the specified line
    */
-  public static int getVisualLineLength(@NotNull final Editor editor, final int line) {
+  public static int getVisualLineLength(final @NotNull Editor editor, final int line) {
     return getLineLength(editor, visualLineToLogicalLine(editor, line));
   }
 
@@ -102,7 +142,7 @@ public class EditorHelper {
    * @param editor The editor
    * @return The number of visible lines in the file
    */
-  public static int getVisualLineCount(@NotNull final Editor editor) {
+  public static int getVisualLineCount(final @NotNull Editor editor) {
     int count = getLineCount(editor);
     return count == 0 ? 0 : logicalLineToVisualLine(editor, count - 1) + 1;
   }
@@ -113,14 +153,8 @@ public class EditorHelper {
    * @param editor The editor
    * @return The file line count
    */
-  public static int getLineCount(@NotNull final Editor editor) {
-    int len = editor.getDocument().getLineCount();
-    if (editor.getDocument().getTextLength() > 0 &&
-        editor.getDocument().getCharsSequence().charAt(editor.getDocument().getTextLength() - 1) == '\n') {
-      len--;
-    }
-
-    return len;
+  public static int getLineCount(final @NotNull Editor editor) {
+    return editor.getDocument().getLineCount();
   }
 
   /**
@@ -128,8 +162,10 @@ public class EditorHelper {
    *
    * @param editor The editor
    * @return The file's character count
+   * @deprecated please use the extension in EditorHelper.kt
    */
-  public static int getFileSize(@NotNull final Editor editor) {
+  @Deprecated
+  public static int getFileSize(final @NotNull Editor editor) {
     return getFileSize(editor, false);
   }
 
@@ -139,88 +175,95 @@ public class EditorHelper {
    * @param editor            The editor
    * @param includeEndNewLine True include newline
    * @return The file's character count
+   * @deprecated please use the extension in EditorHelper.kt
    */
-  public static int getFileSize(@NotNull final Editor editor, final boolean includeEndNewLine) {
+  @Deprecated
+  public static int getFileSize(final @NotNull Editor editor, final boolean includeEndNewLine) {
     final int len = editor.getDocument().getTextLength();
-    return includeEndNewLine || len == 0 || editor.getDocument().getCharsSequence().charAt(len - 1) != '\n' ? len : len - 1;
+    return includeEndNewLine || len == 0 || editor.getDocument().getCharsSequence().charAt(len - 1) != '\n'
+           ? len
+           : len - 1;
   }
 
   /**
    * Best efforts to ensure that scroll offset doesn't overlap itself.
-   *
+   * <p>
    * This is a sanity check that works fine if there are no visible block inlays. Otherwise, the screen height depends
    * on what block inlays are currently visible in the target scroll area. Given a large enough scroll offset (or small
    * enough screen), we can return a scroll offset that takes us over the half way point and causes scrolling issues -
    * skipped lines, or unexpected movement.
-   *
+   * <p>
    * TODO: Investigate better ways of handling scroll offset
    * Perhaps apply scroll offset after the move itself? Calculate a safe offset based on a target area?
    *
-   * @param editor The editor to use to normalize the scroll offset
+   * @param editor       The editor to use to normalize the scroll offset
    * @param scrollOffset The value of the 'scrolloff' option
    * @return The scroll offset value to use
    */
-  public static int normalizeScrollOffset(@NotNull final Editor editor, int scrollOffset) {
+  public static int normalizeScrollOffset(final @NotNull Editor editor, int scrollOffset) {
     return Math.min(scrollOffset, getApproximateScreenHeight(editor) / 2);
   }
 
   /**
-   * Gets the number of lines than can be displayed on the screen at one time. This is rounded down to the
-   * nearest whole line if there is a partial line visible at the bottom of the screen.
+   * Best efforts to ensure the side scroll offset doesn't overlap itself and remains a sensible value. Inline inlays
+   * can cause this to work incorrectly.
    *
+   * @param editor           The editor to use to normalize the side scroll offset
+   * @param sideScrollOffset The value of the 'sidescroll' option
+   * @return The side scroll offset value to use
+   */
+  public static int normalizeSideScrollOffset(final @NotNull Editor editor, int sideScrollOffset) {
+    return Math.min(sideScrollOffset, getApproximateScreenWidth(editor) / 2);
+  }
+
+  /**
+   * Gets the number of lines than can be displayed on the screen at one time.
+   * <p>
    * Note that this value is only approximate and should be avoided whenever possible!
    *
    * @param editor The editor
    * @return The number of screen lines
    */
-  private static int getApproximateScreenHeight(@NotNull final Editor editor) {
-    int lh = editor.getLineHeight();
-    int height = editor.getScrollingModel().getVisibleArea().y +
-                 editor.getScrollingModel().getVisibleArea().height -
-                 getVisualLineAtTopOfScreen(editor) * lh;
-    return height / lh;
+  public static int getApproximateScreenHeight(final @NotNull Editor editor) {
+    return getVisibleArea(editor).height / editor.getLineHeight();
   }
 
   /**
-   * Gets the number of characters that are visible on a screen line
+   * Gets the number of characters that are visible on a screen line, based on screen width and assuming a fixed width
+   * font. It does not include inlays or folds.
+   * <p>
+   * Note that this value is only approximate and should be avoided whenever possible!
    *
    * @param editor The editor
    * @return The number of screen columns
    */
-  public static int getScreenWidth(@NotNull final Editor editor) {
-    Rectangle rect = editor.getScrollingModel().getVisibleArea();
-    Point pt = new Point(rect.width, 0);
-    VisualPosition vp = editor.xyToVisualPosition(pt);
-
-    return vp.column;
+  public static int getApproximateScreenWidth(final @NotNull Editor editor) {
+    return getVisibleArea(editor).width / EditorUtil.getPlainSpaceWidth(editor);
   }
 
   /**
-   * Gets the number of pixels per column of text.
+   * Gets the visual column at the left of the screen for the given visual line.
    *
-   * @param editor The editor
-   * @return The number of pixels
+   * @param editor     The editor
+   * @param visualLine The visual line to use to check for inlays and support non-proportional fonts
+   * @return The visual column number
    */
-  public static int getColumnWidth(@NotNull final Editor editor) {
-    Rectangle rect = editor.getScrollingModel().getVisibleArea();
-    if (rect.width == 0) return 0;
-    Point pt = new Point(rect.width, 0);
-    VisualPosition vp = editor.xyToVisualPosition(pt);
-    if (vp.column == 0) return 0;
-
-    return rect.width / vp.column;
+  public static int getVisualColumnAtLeftOfScreen(final @NotNull Editor editor, int visualLine) {
+    final Rectangle area = getVisibleArea(editor);
+    return getFullVisualColumn(editor, area.x, editor.visualLineToY(visualLine), area.x, area.x + area.width);
   }
 
   /**
-   * Gets the column currently displayed at the left edge of the editor.
+   * Gets the visual column at the right of the screen for the given visual line.
    *
-   * @param editor The editor
-   * @return The column number
+   * @param editor     The editor
+   * @param visualLine The visual line to use to check for inlays and support non-proportional fonts
+   * @return The visual column number
    */
-  public static int getVisualColumnAtLeftOfScreen(@NotNull final Editor editor) {
-    int cw = getColumnWidth(editor);
-    if (cw == 0) return 0;
-    return (editor.getScrollingModel().getHorizontalScrollOffset() + cw - 1) / cw;
+  public static int getVisualColumnAtRightOfScreen(final @NotNull Editor editor, int visualLine) {
+    final Rectangle area = getVisibleArea(editor);
+    return getFullVisualColumn(editor, area.x + area.width - 1, editor.visualLineToY(visualLine), area.x,
+                               area.x + area.width);
   }
 
   /**
@@ -230,7 +273,7 @@ public class EditorHelper {
    * @param line   The visual line number to convert
    * @return The logical line number
    */
-  public static int visualLineToLogicalLine(@NotNull final Editor editor, final int line) {
+  public static int visualLineToLogicalLine(final @NotNull Editor editor, final int line) {
     int logicalLine = editor.visualToLogicalPosition(new VisualPosition(line, 0)).line;
     return normalizeLine(editor, logicalLine);
   }
@@ -243,15 +286,15 @@ public class EditorHelper {
    * @param line   The logical line number to convert
    * @return The visual line number
    */
-  public static int logicalLineToVisualLine(@NotNull final Editor editor, final int line) {
+  public static int logicalLineToVisualLine(final @NotNull Editor editor, final int line) {
     if (editor instanceof EditorImpl) {
       // This is faster than simply calling Editor#logicalToVisualPosition
-      return ((EditorImpl) editor).offsetToVisualLine(editor.getDocument().getLineStartOffset(line));
+      return ((EditorImpl)editor).offsetToVisualLine(editor.getDocument().getLineStartOffset(line));
     }
     return editor.logicalToVisualPosition(new LogicalPosition(line, 0)).line;
   }
 
-  public static int getOffset(@NotNull final Editor editor, final int line, final int column) {
+  public static int getOffset(final @NotNull Editor editor, final int line, final int column) {
     return editor.logicalPositionToOffset(new LogicalPosition(line, column));
   }
 
@@ -262,12 +305,12 @@ public class EditorHelper {
    * @param line   The logical line to get the start offset for.
    * @return 0 if line is &lt 0, file size of line is bigger than file, else the start offset for the line
    */
-  public static int getLineStartOffset(@NotNull final Editor editor, final int line) {
+  public static @Range(from = 0, to = Integer.MAX_VALUE) int getLineStartOffset(final @NotNull Editor editor, final int line) {
     if (line < 0) {
       return 0;
     }
     else if (line >= getLineCount(editor)) {
-      return getFileSize(editor);
+      return EditorHelperRt.getFileSize(editor);
     }
     else {
       return editor.getDocument().getLineStartOffset(line);
@@ -282,7 +325,7 @@ public class EditorHelper {
    * @param allowEnd True include newline
    * @return 0 if line is &lt 0, file size of line is bigger than file, else the end offset for the line
    */
-  public static int getLineEndOffset(@NotNull final Editor editor, final int line, final boolean allowEnd) {
+  public static int getLineEndOffset(final @NotNull Editor editor, final int line, final boolean allowEnd) {
     if (line < 0) {
       return 0;
     }
@@ -304,7 +347,7 @@ public class EditorHelper {
    * @param line   The visual line number to normalize
    * @return The normalized visual line number
    */
-  public static int normalizeVisualLine(@NotNull final Editor editor, final int line) {
+  public static int normalizeVisualLine(final @NotNull Editor editor, final int line) {
     return Math.max(0, Math.min(line, getVisualLineCount(editor) - 1));
   }
 
@@ -316,7 +359,7 @@ public class EditorHelper {
    * @param line   The logical line number to normalize
    * @return The normalized logical line number
    */
-  public static int normalizeLine(@NotNull final Editor editor, final int line) {
+  public static int normalizeLine(final @NotNull Editor editor, final int line) {
     return Math.max(0, Math.min(line, getLineCount(editor) - 1));
   }
 
@@ -330,7 +373,10 @@ public class EditorHelper {
    * @param allowEnd True if newline allowed
    * @return The normalized column number
    */
-  public static int normalizeVisualColumn(@NotNull final Editor editor, final int line, final int col, final boolean allowEnd) {
+  public static int normalizeVisualColumn(final @NotNull Editor editor,
+                                          final int line,
+                                          final int col,
+                                          final boolean allowEnd) {
     return Math.max(0, Math.min(col, getVisualLineLength(editor, line) - (allowEnd ? 0 : 1)));
   }
 
@@ -344,7 +390,10 @@ public class EditorHelper {
    * @param allowEnd True if newline allowed
    * @return The normalized column number
    */
-  public static int normalizeColumn(@NotNull final Editor editor, final int line, final int col, final boolean allowEnd) {
+  public static int normalizeColumn(final @NotNull Editor editor,
+                                    final int line,
+                                    final int col,
+                                    final boolean allowEnd) {
     return Math.min(Math.max(0, getLineLength(editor, line) - (allowEnd ? 0 : 1)), col);
   }
 
@@ -358,7 +407,10 @@ public class EditorHelper {
    * @param allowEnd true if the offset can be one past the last character on the line, false if not
    * @return The normalized column number
    */
-  public static int normalizeOffset(@NotNull final Editor editor, final int line, final int offset, final boolean allowEnd) {
+  public static int normalizeOffset(final @NotNull Editor editor,
+                                    final int line,
+                                    final int offset,
+                                    final boolean allowEnd) {
     if (getFileSize(editor, allowEnd) == 0) {
       return 0;
     }
@@ -368,11 +420,11 @@ public class EditorHelper {
     return Math.max(Math.min(offset, max), min);
   }
 
-  public static int normalizeOffset(@NotNull final Editor editor, final int offset) {
+  public static int normalizeOffset(final @NotNull Editor editor, final int offset) {
     return normalizeOffset(editor, offset, true);
   }
 
-  public static int normalizeOffset(@NotNull final Editor editor, int offset, final boolean allowEnd) {
+  public static int normalizeOffset(final @NotNull Editor editor, int offset, final boolean allowEnd) {
     if (offset <= 0) {
       offset = 0;
     }
@@ -385,11 +437,11 @@ public class EditorHelper {
   }
 
 
-  public static int getLeadingCharacterOffset(@NotNull final Editor editor, final int line) {
+  public static int getLeadingCharacterOffset(final @NotNull Editor editor, final int line) {
     return getLeadingCharacterOffset(editor, line, 0);
   }
 
-  public static int getLeadingCharacterOffset(@NotNull final Editor editor, final int line, final int col) {
+  public static @Range(from = 0, to = Integer.MAX_VALUE) int getLeadingCharacterOffset(final @NotNull Editor editor, final int line, final int col) {
     int start = getLineStartOffset(editor, line) + col;
     int end = getLineEndOffset(editor, line, true);
     CharSequence chars = editor.getDocument().getCharsSequence();
@@ -408,8 +460,7 @@ public class EditorHelper {
     return pos;
   }
 
-  @NotNull
-  public static String getLeadingWhitespace(@NotNull final Editor editor, final int line) {
+  public static @NotNull String getLeadingWhitespace(final @NotNull Editor editor, final int line) {
     int start = getLineStartOffset(editor, line);
     int end = getLeadingCharacterOffset(editor, line);
 
@@ -419,11 +470,10 @@ public class EditorHelper {
   /**
    * Gets the editor for the virtual file within the editor manager.
    *
-   * @param file    The virtual file get the editor for
+   * @param file The virtual file get the editor for
    * @return The matching editor or null if no match was found
    */
-  @Nullable
-  public static Editor getEditor(@Nullable final VirtualFile file) {
+  public static @Nullable Editor getEditor(final @Nullable VirtualFile file) {
     if (file == null) {
       return null;
     }
@@ -432,9 +482,9 @@ public class EditorHelper {
     if (doc == null) {
       return null;
     }
-    final Editor[] editors = EditorFactory.getInstance().getEditors(doc);
-    if (editors.length > 0) {
-      return editors[0];
+    final List<Editor> editors = HelperKt.localEditors(doc);
+    if (editors.size() > 0) {
+      return editors.get(0);
     }
 
     return null;
@@ -447,7 +497,8 @@ public class EditorHelper {
    * @param pos    The visual position to convert
    * @return The file offset of the visual position
    */
-  public static int visualPositionToOffset(@NotNull final Editor editor, @NotNull final VisualPosition pos) {
+  public static int visualPositionToOffset(final @NotNull Editor editor, final @NotNull VisualPosition pos) {
+    // [202] return editor.visualPositionToOffset(pos);
     return editor.logicalPositionToOffset(editor.visualToLogicalPosition(pos));
   }
 
@@ -459,15 +510,13 @@ public class EditorHelper {
    * @param end    The ending offset (exclusive)
    * @return The string, never null but empty if start == end
    */
-  @NotNull
-  public static String getText(@NotNull final Editor editor, final int start, final int end) {
+  public static @NotNull String getText(final @NotNull Editor editor, final int start, final int end) {
     if (start == end) return "";
     final CharSequence documentChars = editor.getDocument().getCharsSequence();
     return documentChars.subSequence(normalizeOffset(editor, start), normalizeOffset(editor, end)).toString();
   }
 
-  @NotNull
-  public static String getText(@NotNull final Editor editor, @NotNull final TextRange range) {
+  public static @NotNull String getText(final @NotNull Editor editor, final @NotNull TextRange range) {
     int len = range.size();
     if (len == 1) {
       return getText(editor, range.getStartOffset(), range.getEndOffset());
@@ -502,7 +551,7 @@ public class EditorHelper {
    * @param offset The offset within the line
    * @return The offset of the line start
    */
-  public static int getLineStartForOffset(@NotNull final Editor editor, final int offset) {
+  public static int getLineStartForOffset(final @NotNull Editor editor, final int offset) {
     LogicalPosition pos = editor.offsetToLogicalPosition(normalizeOffset(editor, offset));
     return editor.getDocument().getLineStartOffset(pos.line);
   }
@@ -514,12 +563,12 @@ public class EditorHelper {
    * @param offset The offset within the line
    * @return The offset of the line end
    */
-  public static int getLineEndForOffset(@NotNull final Editor editor, final int offset) {
+  public static int getLineEndForOffset(final @NotNull Editor editor, final int offset) {
     LogicalPosition pos = editor.offsetToLogicalPosition(normalizeOffset(editor, offset));
     return editor.getDocument().getLineEndOffset(pos.line);
   }
 
-  private static int getLineCharCount(@NotNull final Editor editor, final int line) {
+  private static int getLineCharCount(final @NotNull Editor editor, final int line) {
     return getLineEndOffset(editor, line, true) - getLineStartOffset(editor, line);
   }
 
@@ -530,18 +579,16 @@ public class EditorHelper {
    * @param line   The logical line to get the text for
    * @return The requested line
    */
-  @NotNull
-  public static String getLineText(@NotNull final Editor editor, final int line) {
+  public static @NotNull String getLineText(final @NotNull Editor editor, final int line) {
     return getText(editor, getLineStartOffset(editor, line), getLineEndOffset(editor, line, true));
   }
 
-  @NotNull
-  public static CharBuffer getLineBuffer(@NotNull final Editor editor, final int line) {
+  public static @NotNull CharBuffer getLineBuffer(final @NotNull Editor editor, final int line) {
     int start = getLineStartOffset(editor, line);
     return CharBuffer.wrap(editor.getDocument().getCharsSequence(), start, start + getLineCharCount(editor, line));
   }
 
-  public static boolean isLineEmpty(@NotNull final Editor editor, final int line, final boolean allowBlanks) {
+  public static boolean isLineEmpty(final @NotNull Editor editor, final int line, final boolean allowBlanks) {
     CharSequence chars = editor.getDocument().getCharsSequence();
     if (chars.length() == 0) return true;
     int offset = getLineStartOffset(editor, line);
@@ -562,10 +609,12 @@ public class EditorHelper {
     return false;
   }
 
-  @NotNull
-  public static String pad(@NotNull final Editor editor, @NotNull DataContext context, int line, final int to) {
+  public static @NotNull String pad(final @NotNull Editor editor,
+                                    @NotNull DataContext context,
+                                    int line,
+                                    final int to) {
     final int len = getLineLength(editor, line);
-    if(len >= to) return "";
+    if (len >= to) return "";
 
     final int limit = to - len;
     return IndentConfig.create(editor, context).createIndentBySize(limit);
@@ -576,8 +625,7 @@ public class EditorHelper {
    *
    * @param editor The editor from which the carets are taken
    */
-  @NotNull
-  public static List<Caret> getOrderedCaretsList(@NotNull Editor editor) {
+  public static @NotNull List<Caret> getOrderedCaretsList(@NotNull Editor editor) {
     @NotNull List<Caret> carets = editor.getCaretModel().getAllCarets();
 
     carets.sort(Comparator.comparingInt(Caret::getOffset));
@@ -588,21 +636,20 @@ public class EditorHelper {
 
   /**
    * Scrolls the editor to put the given visual line at the current caret location, relative to the screen.
-   *
+   * <p>
    * Due to block inlays, the caret location is maintained as a scroll offset, rather than the number of lines from the
    * top of the screen. This means the line offset can change if the number of inlays above the caret changes during
    * scrolling. It also means that after scrolling, the top screen line isn't guaranteed to be aligned to the top of
    * the screen, unlike most other motions ('M' is the only other motion that doesn't align the top line).
-   *
+   * <p>
    * This method will also move the caret location to ensure that any inlays attached above or below the target line are
    * fully visible.
    *
-   * @param editor The editor to scroll
+   * @param editor     The editor to scroll
    * @param visualLine The visual line to scroll to the current caret location
    */
-  public static void scrollVisualLineToCaretLocation(@NotNull final Editor editor, int visualLine) {
-    final ScrollingModel scrollingModel = editor.getScrollingModel();
-    final Rectangle visibleArea = scrollingModel.getVisibleArea();
+  public static void scrollVisualLineToCaretLocation(final @NotNull Editor editor, int visualLine) {
+    final Rectangle visibleArea = getVisibleArea(editor);
     final int caretScreenOffset = editor.visualLineToY(editor.getCaretModel().getVisualPosition().line) - visibleArea.y;
 
     final int yVisualLine = editor.visualLineToY(visualLine);
@@ -610,188 +657,314 @@ public class EditorHelper {
     // We try to keep the caret in the same location, but only if there's enough space all around for the line's
     // inlays. E.g. caret on top screen line and the line has inlays above, or caret on bottom screen line and has
     // inlays below
-    final int topInlayHeight = EditorHelper.getHeightOfVisualLineInlays(editor, visualLine, true);
-    final int bottomInlayHeight = EditorHelper.getHeightOfVisualLineInlays(editor, visualLine, false);
+    final int topInlayHeight = EditorUtil.getInlaysHeight(editor, visualLine, true);
+    final int bottomInlayHeight = EditorUtil.getInlaysHeight(editor, visualLine, false);
 
     int inlayOffset = 0;
     if (topInlayHeight > caretScreenOffset) {
       inlayOffset = topInlayHeight;
-    } else if (bottomInlayHeight > visibleArea.height - caretScreenOffset + editor.getLineHeight()) {
+    }
+    else if (bottomInlayHeight > visibleArea.height - caretScreenOffset + editor.getLineHeight()) {
       inlayOffset = -bottomInlayHeight;
     }
 
-    scrollingModel.scrollVertically(yVisualLine - caretScreenOffset - inlayOffset);
+    scrollVertically(editor, yVisualLine - caretScreenOffset - inlayOffset);
   }
 
   /**
    * Scrolls the editor to put the given visual line at the top of the current window. Ensures that any block inlay
    * elements above the given line are also visible.
    *
-   * @param editor The editor to scroll
+   * @param editor     The editor to scroll
    * @param visualLine The visual line to place at the top of the current window
    * @return Returns true if the window was moved
    */
-  public static boolean scrollVisualLineToTopOfScreen(@NotNull final Editor editor, int visualLine) {
-    final ScrollingModel scrollingModel = editor.getScrollingModel();
-    int inlayHeight = getHeightOfVisualLineInlays(editor, visualLine, true);
-    int y = editor.visualLineToY(visualLine) - inlayHeight;
-    int verticalPos = scrollingModel.getVerticalScrollOffset();
-    scrollingModel.scrollVertically(y);
+  public static boolean scrollVisualLineToTopOfScreen(final @NotNull Editor editor, int visualLine) {
 
-    return verticalPos != scrollingModel.getVerticalScrollOffset();
+    final int inlayHeight = EditorUtil.getInlaysHeight(editor, visualLine, true);
+    final int maxInlayHeight = BLOCK_INLAY_MAX_LINE_HEIGHT * editor.getLineHeight();
+    int y = editor.visualLineToY(visualLine) - Math.min(inlayHeight, maxInlayHeight);
+
+    // Normalise Y so that we don't try to scroll the editor to a location it can't reach. The editor will handle this,
+    // but when we ask for the target location to move the caret to match, we'll get the incorrect value.
+    // E.g. from line 100 of a 175 line, with line 100 at the top of screen, hit 100<C-E>. This should scroll line 175
+    // to the top of the screen. With virtual space enabled, this is fine. If it's not enabled, we end up scrolling line
+    // 146 to the top of the screen, but the caret thinks we're going to 175, and the caret is put in the wrong location
+    // (To complicate things, this issue doesn't show up when running headless for tests)
+    if (!editor.getSettings().isAdditionalPageAtBottom()) {
+      // Get the max line number that can sit at the top of the screen
+      final int editorHeight = getVisibleArea(editor).height;
+      final int virtualSpaceHeight = editor.getSettings().getAdditionalLinesCount() * editor.getLineHeight();
+      final int yLastLine = editor.visualLineToY(getLineCount(editor));  // last line + 1
+      y = Math.min(y, yLastLine + virtualSpaceHeight - editorHeight);
+    }
+    return scrollVertically(editor, y);
   }
 
   /**
    * Scrolls the editor to place the given visual line in the middle of the current window.
    *
-   * @param editor The editor to scroll
+   * <p>Snaps the line to the nearest standard line height grid, which gives a good position for both an odd and even
+   * number of lines and mimics what Vim does.</p>
+   *
+   * @param editor     The editor to scroll
    * @param visualLine The visual line to place in the middle of the current window
    */
-  public static void scrollVisualLineToMiddleOfScreen(@NotNull Editor editor, int visualLine) {
-    final ScrollingModel scrollingModel = editor.getScrollingModel();
-    int y = editor.visualLineToY(visualLine);
-    int lineHeight = editor.getLineHeight();
-    int height = scrollingModel.getVisibleArea().height;
-    scrollingModel.scrollVertically(y - ((height - lineHeight) / 2));
+  public static void scrollVisualLineToMiddleOfScreen(@NotNull Editor editor, int visualLine, boolean allowVirtualSpace) {
+    final int y = editor.visualLineToY(normalizeVisualLine(editor, visualLine));
+    final Rectangle visibleArea = getVisibleArea(editor);
+    final int screenHeight = visibleArea.height;
+    final int lineHeight = editor.getLineHeight();
+
+    final int offset = y - ((screenHeight - lineHeight) / lineHeight / 2 * lineHeight);
+    final int lastVisualLine = EditorHelper.getVisualLineCount(editor) - 1;
+    final int offsetForLastLineAtBottom = getOffsetToScrollVisualLineToBottomOfScreen(editor, lastVisualLine);
+
+    // For `zz`, we want to use virtual space and move any line, including the last one, to the middle of the screen.
+    // For `G` or `zb`, do not allow virtual space, so only scroll far enough to keep the last line at the bottom of the
+    // screen
+    if (!allowVirtualSpace && offset > offsetForLastLineAtBottom) {
+      scrollVertically(editor, offsetForLastLineAtBottom);
+    }
+    else {
+      scrollVertically(editor, offset);
+    }
   }
 
   /**
    * Scrolls the editor to place the given visual line at the bottom of the screen.
    *
-   * When we're moving the caret down a few lines and want to scroll to keep this visible, we need to be able to place a
-   * line at the bottom of the screen. Due to block inlays, we can't do this by specifying a top line to scroll to.
+   * <p>When we're moving the caret down a few lines and want to scroll to keep this visible, we need to be able to
+   * place a line at the bottom of the screen. Due to block inlays, we can't do this by specifying a top line to scroll
+   * to.</p>
    *
-   * @param editor The editor to scroll
-   * @param visualLine The visual line to place at the bottom of the current window
+   * @param editor                  The editor to scroll
+   * @param nonNormalisedVisualLine The non-normalised visual line to place at the bottom of the current window. Might
+   *                                be greater than visual line count to scroll to virtual space at the end of the file
    * @return True if the editor was scrolled
    */
-  public static boolean scrollVisualLineToBottomOfScreen(@NotNull Editor editor, int visualLine) {
-    final ScrollingModel scrollingModel = editor.getScrollingModel();
-    int inlayHeight = getHeightOfVisualLineInlays(editor, visualLine, false);
-    int y = editor.visualLineToY(visualLine);
-    int verticalPos = scrollingModel.getVerticalScrollOffset();
-    int height = inlayHeight + editor.getLineHeight();
-
-    Rectangle visibleArea = scrollingModel.getVisibleArea();
-
-    scrollingModel.scrollVertically(y - visibleArea.height + height);
-
-    return verticalPos != scrollingModel.getVerticalScrollOffset();
+  public static boolean scrollVisualLineToBottomOfScreen(@NotNull Editor editor, int nonNormalisedVisualLine) {
+    final int offset = getOffsetToScrollVisualLineToBottomOfScreen(editor, nonNormalisedVisualLine);
+    return scrollVertically(editor, offset);
   }
 
-  /**
-   * Scrolls the screen up or down one or more pages.
-   *
-   * @param editor The editor to scroll
-   * @param pages The number of pages to scroll. Positive is scroll down (lines move up). Negative is scroll up.
-   * @return The visual line to place the caret on. -1 if the page wasn't scrolled at all.
-   */
-  public static int scrollFullPage(@NotNull final Editor editor, int pages) {
-    if (pages > 0) {
-      return scrollFullPageDown(editor, pages);
+  private static int getOffsetToScrollVisualLineToBottomOfScreen(@NotNull Editor editor, int nonNormalisedVisualLine) {
+    int exPanelHeight = 0;
+    if (ExEntryPanel.getInstance().isActive()) {
+      exPanelHeight = ExEntryPanel.getInstance().getHeight();
     }
-    else if (pages < 0) {
-      return scrollFullPageUp(editor, pages);
+    if (ExEntryPanel.getInstanceWithoutShortcuts().isActive()) {
+      exPanelHeight += ExEntryPanel.getInstanceWithoutShortcuts().getHeight();
     }
-    return -1;  // visual lines are 1-based
+
+    // Note that we explicitly do not normalise the visual line, as we might be trying to scroll a virtual line, at the
+    // end of the file
+    final int lineHeight = editor.getLineHeight();
+    final int screenHeight = getVisibleArea(editor).height - exPanelHeight;
+    final int inlayHeight = EditorUtil.getInlaysHeight(editor, nonNormalisedVisualLine, false);
+    final int maxInlayHeight = BLOCK_INLAY_MAX_LINE_HEIGHT * lineHeight;
+    final int y = editor.visualLineToY(nonNormalisedVisualLine) + lineHeight + min(inlayHeight, maxInlayHeight);
+    return max(0, y - screenHeight);
   }
 
-  public static int lastColumnForLine(@NotNull final Editor editor, int line, boolean allowEnd) {
+  public static void scrollColumnToLeftOfScreen(@NotNull Editor editor, int visualLine, int visualColumn) {
+    int targetVisualColumn = visualColumn;
+
+    // Requested column might be an inlay (because we do simple arithmetic on visual position, and inlays and folds have
+    // a visual position). If it is an inlay and is related to following text, we want to display it, so use it as the
+    // target column. If it's an inlay related to preceding text, we don't want to display it at the left of the screen,
+    // show the next column instead
+    Inlay<?> inlay = editor.getInlayModel().getInlineElementAt(new VisualPosition(visualLine, visualColumn));
+    if (inlay != null && inlay.isRelatedToPrecedingText()) {
+      targetVisualColumn = visualColumn + 1;
+    }
+    else if (visualColumn > 0) {
+      inlay = editor.getInlayModel().getInlineElementAt(new VisualPosition(visualLine, visualColumn - 1));
+      if (inlay != null && !inlay.isRelatedToPrecedingText()) {
+        targetVisualColumn = visualColumn - 1;
+      }
+    }
+
+    final int columnLeftX = editor.visualPositionToXY(new VisualPosition(visualLine, targetVisualColumn)).x;
+    scrollHorizontally(editor, columnLeftX);
+  }
+
+  public static void scrollColumnToMiddleOfScreen(@NotNull Editor editor, int visualLine, int visualColumn) {
+    final Point point = editor.visualPositionToXY(new VisualPosition(visualLine, visualColumn));
+    final int screenWidth = getVisibleArea(editor).width;
+
+    // Snap the column to the nearest standard column grid. This positions us nicely if there are an odd or even number
+    // of columns. It also works with inline inlays and folds. It is slightly inaccurate for proportional fonts, but is
+    // still a good solution. Besides, what kind of monster uses Vim with proportional fonts?
+    final int standardColumnWidth = EditorUtil.getPlainSpaceWidth(editor);
+    final int x = point.x - (screenWidth / standardColumnWidth / 2 * standardColumnWidth);
+    scrollHorizontally(editor, x);
+  }
+
+  public static void scrollColumnToRightOfScreen(@NotNull Editor editor, int visualLine, int visualColumn) {
+    int targetVisualColumn = visualColumn;
+
+    // Requested column might be an inlay (because we do simple arithmetic on visual position, and inlays and folds have
+    // a visual position). If it is an inlay and is related to preceding text, we want to display it, so use it as the
+    // target column. If it's an inlay related to following text, we don't want to display it at the right of the
+    // screen, show the previous column
+    Inlay<?> inlay = editor.getInlayModel().getInlineElementAt(new VisualPosition(visualLine, visualColumn));
+    if (inlay != null && !inlay.isRelatedToPrecedingText()) {
+      targetVisualColumn = visualColumn - 1;
+    }
+    else {
+      // If the target column is followed by an inlay which is associated with it, make the inlay the target column so
+      // it is visible
+      inlay = editor.getInlayModel().getInlineElementAt(new VisualPosition(visualLine, visualColumn + 1));
+      if (inlay != null && inlay.isRelatedToPrecedingText()) {
+        targetVisualColumn = visualColumn + 1;
+      }
+    }
+
+    // Scroll to the left edge of the target column, minus a screenwidth, and adjusted for inlays
+    final int targetColumnRightX = editor.visualPositionToXY(new VisualPosition(visualLine, targetVisualColumn + 1)).x;
+    final int screenWidth = getVisibleArea(editor).width;
+    scrollHorizontally(editor, targetColumnRightX - screenWidth);
+  }
+
+  public static int lastColumnForLine(final @NotNull Editor editor, int line, boolean allowEnd) {
     return editor.offsetToVisualPosition(EditorHelper.getLineEndOffset(editor, line, allowEnd)).column;
   }
 
-  public static int prepareLastColumn(@NotNull Editor editor, @NotNull Caret caret) {
-    VisualPosition pos = caret.getVisualPosition();
+  public static int prepareLastColumn(@NotNull Caret caret) {
+    // In most cases vimLastColumn contains a correct value. But it would be incorrect if IJ will move the caret
+    //   and IdeaVim won't catch that. Here we try to detect and process this case.
+
+    int vimLastColumn = UserDataManager.getVimLastColumn(caret);
+    VisualPosition visualPosition = caret.getVisualPosition();
+
+    // Current column equals to vimLastColumn. It's great, everything is okay.
+    int inlayAwareOffset = InlayHelperKt.toInlayAwareOffset(visualPosition, caret);
+    if (inlayAwareOffset == vimLastColumn) return vimLastColumn;
+
+    Editor editor = caret.getEditor();
+    boolean isEndAllowed = CommandStateHelper.isEndAllowedIgnoringOnemore(CommandStateHelper.getMode(editor));
     final LogicalPosition logicalPosition = caret.getLogicalPosition();
-    final int lastColumn = EditorHelper.lastColumnForLine(editor, logicalPosition.line, CommandStateHelper.isEndAllowed(CommandStateHelper.getMode(editor)));
-    if (pos.column != lastColumn) {
-      return pos.column;
-    } else {
-      return UserDataManager.getVimLastColumn(caret);
+    int lastColumn = EditorHelper.lastColumnForLine(editor, logicalPosition.line, isEndAllowed);
+
+    // Current column is somewhere at the end and vimLastColumn is greater than last column. This might be because
+    //  the previous vertical motion was from a longer line. In this case we just return vimLastColumn. But it
+    //  also might be the case decribed above: IJ did move the caret and IdeaVim didn't catch that. We don't process
+    //  this case and just return vimLastColumn with the hope that this won't be a big pain for the user.
+    // This logic can be polished in the future.
+    if ((lastColumn == visualPosition.column || lastColumn + 1 == visualPosition.column) &&
+        vimLastColumn > visualPosition.column) {
+      return vimLastColumn;
     }
+
+    // Okay here we know that something is definitely wrong. We set vimLastColumn to the current column.
+    int updatedCol = InlayHelperKt.getInlayAwareVisualColumn(caret);
+    UserDataManager.setVimLastColumn(caret, updatedCol);
+    return updatedCol;
   }
 
-  public static void updateLastColumn(@NotNull Editor editor, @NotNull Caret caret, int prevLastColumn) {
-    VisualPosition pos = caret.getVisualPosition();
-    final LogicalPosition logicalPosition = caret.getLogicalPosition();
-    final int lastColumn = EditorHelper.lastColumnForLine(editor, logicalPosition.line, CommandStateHelper.isEndAllowed(CommandStateHelper.getMode(editor)));
-    int targetColumn = pos.column != lastColumn ? pos.column : prevLastColumn;
-    UserDataManager.setVimLastColumn(caret, targetColumn);
+  public static void updateLastColumn(@NotNull Caret caret, int prevLastColumn) {
+    UserDataManager.setVimLastColumn(caret, prevLastColumn);
   }
 
-  private static int scrollFullPageDown(@NotNull final Editor editor, int pages) {
-    final Rectangle visibleArea = editor.getScrollingModel().getVisibleArea();
-    final int lineCount = getVisualLineCount(editor);
-
-    if (editor.getCaretModel().getVisualPosition().line == lineCount - 1)
-      return -1;
+  /**
+   * Scroll page down, moving text up.
+   *
+   * @param editor  The editor to scroll
+   * @param pages   How many pages to scroll
+   * @return A pair consisting of a flag to show if scrolling was completed, and a visual line to position the cart on
+   */
+  public static Pair<Boolean, Integer> scrollFullPageDown(final @NotNull Editor editor, int pages) {
+    final Rectangle visibleArea = getVisibleArea(editor);
+    final int lastVisualLine = getVisualLineCount(editor) - 1;
 
     int y = visibleArea.y + visibleArea.height;
     int topBound = visibleArea.y;
     int bottomBound = visibleArea.y + visibleArea.height;
-    int line = 0;
-    int caretLine = -1;
+    int targetTopVisualLine = 0;
+    int caretVisualLine = -1;
+    boolean completed = true;
 
     for (int i = 0; i < pages; i++) {
-      line = getFullVisualLine(editor, y, topBound, bottomBound);
-      if (line >= lineCount - 1) {
-        // If we're on the last page, end nicely on the last line, otherwise return the overrun so we can "beep"
+      targetTopVisualLine = getFullVisualLine(editor, y, topBound, bottomBound);
+      if (targetTopVisualLine >= lastVisualLine) {
+        // If we're on the last page, end nicely on the last line, otherwise move the caret to the last line of the file
         if (i == pages - 1) {
-          caretLine = lineCount - 1;
+          caretVisualLine = lastVisualLine;
         }
         else {
-          caretLine = line;
+          caretVisualLine = getVisualLineCount(editor) - 1;
+          completed = false;
         }
+        targetTopVisualLine = lastVisualLine;
         break;
       }
 
       // The help page for 'scrolling' states that a page is the number of lines in the window minus two. Scrolling a
-      // page adds this page length to the current line. Or in other words, scrolling down a page puts the last but one
-      // line at the top of the next page.
+      // page adds this page length to the current targetTopVisualLine. Or in other words, scrolling down a page puts
+      // the last but one targetTopVisualLine at the top of the next page.
       // E.g. a window showing lines 1-35 has a page size of 33, and scrolling down a page shows 34 as the top line
-      line--;
+      targetTopVisualLine--;
 
-      y = editor.visualLineToY(line);
+      y = editor.visualLineToY(targetTopVisualLine);
       topBound = y;
       bottomBound = y + visibleArea.height;
       y = bottomBound;
-      caretLine = line;
+      caretVisualLine = targetTopVisualLine;
     }
 
-    scrollVisualLineToTopOfScreen(editor, line);
-    return caretLine;
+    scrollVisualLineToTopOfScreen(editor, targetTopVisualLine);
+    return new Pair<>(completed, caretVisualLine);
   }
 
-  private static int scrollFullPageUp(@NotNull final Editor editor, int pages) {
-    final Rectangle visibleArea = editor.getScrollingModel().getVisibleArea();
+  /**
+   * Scroll page up, moving text down.
+   *
+   * @param editor  The editor to scroll
+   * @param pages   How many pages to scroll
+   * @return A pair consisting of a flag to show if scrolling was completed, and a visual line to position the cart on
+   */
+  public static Pair<Boolean, Integer> scrollFullPageUp(final @NotNull Editor editor, int pages) {
+    final Rectangle visibleArea = getVisibleArea(editor);
     final int lineHeight = editor.getLineHeight();
+    final int lastVisualLine = getVisualLineCount(editor) - 1;
 
     int y = visibleArea.y;
     int topBound = visibleArea.y;
     int bottomBound = visibleArea.y + visibleArea.height;
-    int line = 0;
-    int caretLine = -1;
+    int targetBottomVisualLine = 0;
+    int caretVisualLine = -1;
+    boolean completed = true;
 
-    // We know pages is negative
-    for (int i = pages; i < 0; i++) {
-      // E.g. a window showing 73-107 has page size 33. Scrolling up puts 74 at the bottom of the screen
-      line = getFullVisualLine(editor, y, topBound, bottomBound) + 1;
-      if (line == 1) {
+    for (int i = 0; i < pages; i++) {
+      // Scrolling up puts the current top line plus one at the bottom of the screen
+      targetBottomVisualLine = getFullVisualLine(editor, y, topBound, bottomBound) + 1;
+      if (targetBottomVisualLine == 1) {
+        completed = i == pages - 1;
         break;
       }
+      else if (targetBottomVisualLine == lastVisualLine) {
+        // Vim normally scrolls up window height minus two. When there are only one or two lines in the screen, due to
+        // end of file and virtual space, it scrolls window height minus one, or just plain windows height. IntelliJ
+        // doesn't allow us only one line when virtual space is enabled, so we only need to handle the two line case.
+        // Subtract the +1 we added above.
+        targetBottomVisualLine--;
+      }
 
-      y = editor.visualLineToY(line);
+      y = editor.visualLineToY(targetBottomVisualLine);
       bottomBound = y + lineHeight;
       topBound = bottomBound - visibleArea.height;
       y = topBound;
-      caretLine = line;
+      caretVisualLine = targetBottomVisualLine;
     }
 
-    scrollVisualLineToBottomOfScreen(editor, line);
-    return caretLine;
+    scrollVisualLineToBottomOfScreen(editor, targetBottomVisualLine);
+    return new Pair<>(completed, caretVisualLine);
   }
 
-  private static int getFullVisualLine(@NotNull final Editor editor, int y, int topBound, int bottomBound) {
+  private static int getFullVisualLine(final @NotNull Editor editor, int y, int topBound, int bottomBound) {
+    // Note that we ignore inlays here. We're interested in the bounds of the text line. Scrolling will handle inlays as
+    // it sees fit (e.g. scrolling a line to the bottom will make sure inlays below the line are visible).
     int line = editor.yToVisualLine(y);
     int yActual = editor.visualLineToY(line);
     if (yActual < topBound) {
@@ -803,14 +976,57 @@ public class EditorHelper {
     return line;
   }
 
-  private static int getHeightOfVisualLineInlays(@NotNull final Editor editor, int visualLine, boolean above) {
-    InlayModel inlayModel = editor.getInlayModel();
-    List<Inlay> inlays = inlayModel.getBlockElementsForVisualLine(visualLine, above);
-    int inlayHeight = 0;
-    for (Inlay inlay : inlays) {
-      inlayHeight += inlay.getHeightInPixels();
+  private static int getFullVisualColumn(final @NotNull Editor editor, int x, int y, int leftBound, int rightBound) {
+    // Mapping XY to a visual position will return the position of the closest character, rather than the position of
+    // the character grid that contains the XY. This means two things. Firstly, we don't get back the visual position of
+    // an inline inlay, and secondly, we can get the character to the left or right of X. This is the same logic for
+    // positioning the caret when you click in the editor.
+    // Note that visualPos.leansRight will be true for the right half side of the character grid
+    VisualPosition closestVisualPosition = editor.xyToVisualPosition(new Point(x, y));
+
+    // Make sure we get the character that contains this XY, not the editor's decision about closest character. The
+    // editor will give us the next character if X is over half way through the character grid.
+    int xActualLeft = editor.visualPositionToXY(closestVisualPosition).x;
+    if (xActualLeft > x) {
+      closestVisualPosition = getPreviousNonInlayVisualPosition(editor, closestVisualPosition);
+      xActualLeft = editor.visualPositionToXY(closestVisualPosition).x;
     }
-    return inlayHeight;
+
+    if (xActualLeft >= leftBound) {
+      final int xActualRight =
+        editor.visualPositionToXY(new VisualPosition(closestVisualPosition.line, closestVisualPosition.column + 1)).x -
+        1;
+      if (xActualRight <= rightBound) {
+        return closestVisualPosition.column;
+      }
+
+      return getPreviousNonInlayVisualPosition(editor, closestVisualPosition).column;
+    }
+    else {
+      return getNextNonInlayVisualPosition(editor, closestVisualPosition).column;
+    }
+  }
+
+  private static VisualPosition getNextNonInlayVisualPosition(@NotNull Editor editor, VisualPosition position) {
+    final InlayModel inlayModel = editor.getInlayModel();
+    final int lineLength = EditorHelper.getVisualLineLength(editor, position.line);
+    position = new VisualPosition(position.line, position.column + 1);
+    while (position.column < lineLength && inlayModel.hasInlineElementAt(position)) {
+      position = new VisualPosition(position.line, position.column + 1);
+    }
+    return position;
+  }
+
+  private static VisualPosition getPreviousNonInlayVisualPosition(@NotNull Editor editor, VisualPosition position) {
+    if (position.column == 0) {
+      return position;
+    }
+    final InlayModel inlayModel = editor.getInlayModel();
+    position = new VisualPosition(position.line, position.column - 1);
+    while (position.column >= 0 && inlayModel.hasInlineElementAt(position)) {
+      position = new VisualPosition(position.line, position.column - 1);
+    }
+    return position;
   }
 
   /**
@@ -819,8 +1035,7 @@ public class EditorHelper {
    * @param editor The editor
    * @return The virtual file for the editor
    */
-  @Nullable
-  public static VirtualFile getVirtualFile(@NotNull Editor editor) {
+  public static @Nullable VirtualFile getVirtualFile(@NotNull Editor editor) {
     return FileDocumentManager.getInstance().getFile(editor.getDocument());
   }
 
@@ -830,5 +1045,29 @@ public class EditorHelper {
   public static boolean isFileEditor(@NotNull Editor editor) {
     final VirtualFile virtualFile = getVirtualFile(editor);
     return virtualFile != null && !(virtualFile instanceof LightVirtualFile);
+  }
+
+  /**
+   * Checks if the editor is a diff window
+   */
+  public static boolean isDiffEditor(@NotNull Editor editor) {
+    return editor.getEditorKind() == EditorKind.DIFF;
+  }
+
+  /**
+   * Checks if the document in the editor is modified.
+   */
+  public static boolean hasUnsavedChanges(@NotNull Editor editor) {
+    int line = 0;
+    Document document = editor.getDocument();
+
+    while (line < document.getLineCount()) {
+      if (document.isLineModified(line)) {
+        return true;
+      }
+      line++;
+    }
+
+    return false;
   }
 }

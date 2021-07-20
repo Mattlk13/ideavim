@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,12 +18,19 @@
 
 package com.maddyhome.idea.vim.option;
 
+import com.maddyhome.idea.vim.helper.VimNlsSafe;
+import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * Represents a boolean option
  */
-public class ToggleOption extends Option {
+public class ToggleOption extends Option<Boolean> {
+
+  private static final @NonNls String NO_PREFIX = "no";
+  protected final boolean dflt;
+  protected boolean value;
+
   /**
    * Creates the option
    *
@@ -31,19 +38,15 @@ public class ToggleOption extends Option {
    * @param abbrev The short name
    * @param dflt   The default value
    */
-  ToggleOption(String name, String abbrev, boolean dflt) {
+  public ToggleOption(@VimNlsSafe String name, @VimNlsSafe String abbrev, boolean dflt) {
     super(name, abbrev);
 
     this.dflt = dflt;
     this.value = dflt;
   }
 
-  /**
-   * The option's value
-   *
-   * @return The value
-   */
-  public boolean getValue() {
+  @Override
+  public Boolean getValue() {
     return value;
   }
 
@@ -81,7 +84,7 @@ public class ToggleOption extends Option {
     boolean old = value;
     value = val;
     if (val != old) {
-      fireOptionChangeEvent();
+      fireOptionChangeEvent(old, val);
     }
   }
 
@@ -90,11 +93,10 @@ public class ToggleOption extends Option {
    *
    * @return The option's display value
    */
-  @NotNull
-  public String toString() {
+  public @NotNull String toString() {
     StringBuilder res = new StringBuilder();
     if (!value) {
-      res.append("no");
+      res.append(NO_PREFIX);
     }
     else {
       res.append("  ");
@@ -122,7 +124,4 @@ public class ToggleOption extends Option {
   public void resetDefault() {
     value = dflt;
   }
-
-  protected final boolean dflt;
-  protected boolean value;
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,47 +21,39 @@ package com.maddyhome.idea.vim.action.motion.scroll
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.action.VimCommandAction
+import com.maddyhome.idea.vim.action.ComplicatedKeysAction
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.command.MappingMode
+import com.maddyhome.idea.vim.command.CommandFlags.FLAG_CLEAR_STROKES
+import com.maddyhome.idea.vim.command.CommandFlags.FLAG_IGNORE_SCROLL_JUMP
 import com.maddyhome.idea.vim.handler.VimActionHandler
 import com.maddyhome.idea.vim.helper.enumSetOf
 import java.awt.event.KeyEvent
 import java.util.*
 import javax.swing.KeyStroke
 
-
-class MotionScrollPageUpAction : VimCommandAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.NVO
-
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("<C-B>", "<PageUp>")
+class MotionScrollPageUpAction : VimActionHandler.SingleExecution() {
 
   override val type: Command.Type = Command.Type.OTHER_READONLY
 
-  override fun makeActionHandler(): VimActionHandler = MotionScrollPageUpActionHandler
+  override val flags: EnumSet<CommandFlags> = enumSetOf(FLAG_IGNORE_SCROLL_JUMP)
+
+  override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
+    return VimPlugin.getMotion().scrollFullPage(editor, editor.caretModel.primaryCaret, -cmd.count)
+  }
 }
 
-class MotionScrollPageUpInsertModeAction : VimCommandAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.I
+class MotionScrollPageUpInsertModeAction : VimActionHandler.SingleExecution(), ComplicatedKeysAction {
 
   override val keyStrokesSet: Set<List<KeyStroke>> = setOf(
-    listOf(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_UP, 0)),
-    listOf(KeyStroke.getKeyStroke(KeyEvent.VK_UP, KeyEvent.CTRL_MASK)),
-    listOf(KeyStroke.getKeyStroke(KeyEvent.VK_KP_UP, KeyEvent.CTRL_MASK)),
-    listOf(KeyStroke.getKeyStroke(KeyEvent.VK_UP, KeyEvent.SHIFT_MASK)),
-    listOf(KeyStroke.getKeyStroke(KeyEvent.VK_KP_UP, KeyEvent.SHIFT_MASK))
+    listOf(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_UP, 0))
   )
 
   override val type: Command.Type = Command.Type.OTHER_READONLY
 
-  override val flags: EnumSet<CommandFlags> = enumSetOf(CommandFlags.FLAG_CLEAR_STROKES)
+  override val flags: EnumSet<CommandFlags> = enumSetOf(FLAG_IGNORE_SCROLL_JUMP, FLAG_CLEAR_STROKES)
 
-  override fun makeActionHandler(): VimActionHandler = MotionScrollPageUpActionHandler
-}
-
-private object MotionScrollPageUpActionHandler : VimActionHandler.SingleExecution() {
   override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
-    return VimPlugin.getMotion().scrollFullPage(editor, -cmd.count)
+    return VimPlugin.getMotion().scrollFullPage(editor, editor.caretModel.primaryCaret, -cmd.count)
   }
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,38 +21,31 @@ package com.maddyhome.idea.vim.action.motion.select
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.action.VimCommandAction
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.command.MappingMode
 import com.maddyhome.idea.vim.group.visual.vimSetSystemSelectionSilently
 import com.maddyhome.idea.vim.handler.VimActionHandler
 import com.maddyhome.idea.vim.helper.EditorHelper
+import com.maddyhome.idea.vim.helper.moveToInlayAwareOffset
 import com.maddyhome.idea.vim.helper.vimLastColumn
-import javax.swing.KeyStroke
 
 /**
  * @author Alex Plate
  */
 
-class SelectEnableCharacterModeAction : VimCommandAction() {
-  override fun makeActionHandler(): VimActionHandler = object : VimActionHandler.SingleExecution() {
-    override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
-      editor.caretModel.runForEachCaret { caret ->
-        val lineEnd = EditorHelper.getLineEndForOffset(editor, caret.offset)
-        caret.run {
-          vimSetSystemSelectionSilently(offset, (offset + 1).coerceAtMost(lineEnd))
-          moveToOffset((offset + 1).coerceAtMost(lineEnd))
-          vimLastColumn = visualPosition.column
-        }
-      }
-      return VimPlugin.getVisualMotion().enterSelectMode(editor, CommandState.SubMode.VISUAL_CHARACTER)
-    }
-  }
-
-  override val mappingModes: MutableSet<MappingMode> = MappingMode.N
-
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("gh")
+class SelectEnableCharacterModeAction : VimActionHandler.SingleExecution() {
 
   override val type: Command.Type = Command.Type.OTHER_READONLY
+
+  override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
+    editor.caretModel.runForEachCaret { caret ->
+      val lineEnd = EditorHelper.getLineEndForOffset(editor, caret.offset)
+      caret.run {
+        vimSetSystemSelectionSilently(offset, (offset + 1).coerceAtMost(lineEnd))
+        moveToInlayAwareOffset((offset + 1).coerceAtMost(lineEnd))
+        vimLastColumn = visualPosition.column
+      }
+    }
+    return VimPlugin.getVisualMotion().enterSelectMode(editor, CommandState.SubMode.VISUAL_CHARACTER)
+  }
 }

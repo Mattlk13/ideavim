@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,13 +21,12 @@
 package org.jetbrains.plugins.ideavim.action.motion.leftright
 
 import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
 import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 class MotionLastColumnActionTest : VimTestCase() {
   fun `test dollar motion`() {
-    val keys = parseKeys("$")
+    val keys = "$"
     val before = """
             A Discovery
 
@@ -35,7 +34,7 @@ class MotionLastColumnActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -43,12 +42,12 @@ class MotionLastColumnActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
   fun `test dollar motion with motion to longer line`() {
-    val keys = parseKeys("\$j")
+    val keys = "\$j"
     val before = """
             A Discovery
 
@@ -56,7 +55,7 @@ class MotionLastColumnActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,[ additional symbols]
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -64,12 +63,12 @@ class MotionLastColumnActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,[ additional symbols${c}]
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
   fun `test dollar motion in visual block mode`() {
-    val keys = parseKeys("<C-V>jj\$")
+    val keys = "<C-V>jj\$"
     val before = """
             A Discovery
 
@@ -77,7 +76,7 @@ class MotionLastColumnActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,[ additional symbols]
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -85,20 +84,22 @@ class MotionLastColumnActionTest : VimTestCase() {
             al${s}l rocks and lavender and tufted grass,[ additional symbols${c}]${se}
             wh${s}ere it was settled on some sodden sand${c}${se}
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.VISUAL, CommandState.SubMode.VISUAL_BLOCK)
   }
 
-  @VimBehaviorDiffers(originalVimAfter = """
+  @VimBehaviorDiffers(
+    originalVimAfter = """
             A Discovery
 
             I ${s}found it in a legendary lan${c}d${se}
             al${s}l rocks and lavender and tufted grass${c},${se}[ additional symbols]
             wh${s}ere it was settled on some sodden san${c}d${se}
             hard by the torrent of a mountain pass.
-    """)
+    """
+  )
   fun `test dollar motion in visual block mode with left motion`() {
-    val keys = parseKeys("<C-V>jj\$h")
+    val keys = "<C-V>jj\$h"
     val before = """
             A Discovery
 
@@ -106,7 +107,7 @@ class MotionLastColumnActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,[ additional symbols]
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -114,7 +115,59 @@ class MotionLastColumnActionTest : VimTestCase() {
             al${s}l rocks and lavender and tufted grass,[ additional symbols${c}]${se}
             wh${s}ere it was settled on some sodden san${c}d${se}
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.VISUAL, CommandState.SubMode.VISUAL_BLOCK)
+  }
+
+  fun `test dollar motion from insert mode`() {
+    val keys = "i<C-O>$"
+    val before = """
+            A Discovery
+
+            I ${c}found it in a legendary land
+            all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    val after = """
+            A Discovery
+
+            I found it in a legendary land${c}
+            all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    doTest(keys, before, after, CommandState.Mode.INSERT, CommandState.SubMode.NONE)
+  }
+
+  @VimBehaviorDiffers(
+    originalVimAfter = """
+            A Discovery
+
+            I${c} 
+            all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+  """,
+    description = "Not sure how to fix it right"
+  )
+  fun `test dollar motion from insert mode with deletion`() {
+    val keys = "i<C-O>d$"
+    val before = """
+            A Discovery
+
+            I ${c}found it in a legendary land
+            all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    val after = """
+            A Discovery
+
+            I ${c}all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    doTest(keys, before, after, CommandState.Mode.INSERT, CommandState.SubMode.NONE)
   }
 }

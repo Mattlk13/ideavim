@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,9 +26,11 @@ import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandFlags
 import com.maddyhome.idea.vim.command.CommandState
+import com.maddyhome.idea.vim.command.TextObjectVisualType
 import com.maddyhome.idea.vim.common.TextRange
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.group.visual.vimSetSelection
+import com.maddyhome.idea.vim.helper.endOffsetInclusive
 import com.maddyhome.idea.vim.helper.inVisualMode
 import com.maddyhome.idea.vim.helper.subMode
 import com.maddyhome.idea.vim.helper.vimSelectionStart
@@ -40,24 +42,45 @@ import com.maddyhome.idea.vim.helper.vimSelectionStart
  *
  * This handler gets executed for each caret.
  */
-abstract class TextObjectActionHandler : EditorActionHandlerBase.ForEachCaret() {
-  abstract fun getRange(editor: Editor, caret: Caret, context: DataContext, count: Int, rawCount: Int, argument: Argument?): TextRange?
-  override fun execute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean {
+abstract class TextObjectActionHandler : EditorActionHandlerBase(true) {
+
+  final override val type: Command.Type = Command.Type.MOTION
+
+  /**
+   * Visual mode that works for this text object.
+   * E.g. In visual line-wise mode, `aw` will switch to character mode.
+   *   In visual character mode, `ip` will switch to line-wise mode.
+   */
+  abstract val visualType: TextObjectVisualType
+
+  abstract fun getRange(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): TextRange?
+
+  /**
+   * This code is called when user executes text object in visual mode. E.g. `va(a(a(`
+   */
+  final override fun baseExecute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean {
     if (!editor.inVisualMode) return true
 
     val range = getRange(editor, caret, context, cmd.count, cmd.rawCount, cmd.argument) ?: return false
 
     val block = CommandFlags.FLAG_TEXT_BLOCK in cmd.flags
-    val newstart = if (block || caret.offset >= caret.vimSelectionStart) range.startOffset else range.endOffset
-    val newend = if (block || caret.offset >= caret.vimSelectionStart) range.endOffset else range.startOffset
+    val newstart = if (block || caret.offset >= caret.vimSelectionStart) range.startOffset else range.endOffsetInclusive
+    val newend = if (block || caret.offset >= caret.vimSelectionStart) range.endOffsetInclusive else range.startOffset
 
     if (caret.vimSelectionStart == caret.offset || block) {
       caret.vimSetSelection(newstart, newstart, false)
     }
 
-    if (CommandFlags.FLAG_MOT_LINEWISE in cmd.flags && CommandFlags.FLAG_VISUAL_CHARACTERWISE !in cmd.flags && editor.subMode != CommandState.SubMode.VISUAL_LINE) {
+    if (visualType == TextObjectVisualType.LINE_WISE && editor.subMode != CommandState.SubMode.VISUAL_LINE) {
       VimPlugin.getVisualMotion().toggleVisual(editor, 1, 0, CommandState.SubMode.VISUAL_LINE)
-    } else if ((CommandFlags.FLAG_MOT_LINEWISE !in cmd.flags || CommandFlags.FLAG_VISUAL_CHARACTERWISE in cmd.flags) && editor.subMode == CommandState.SubMode.VISUAL_LINE) {
+    } else if (visualType != TextObjectVisualType.LINE_WISE && editor.subMode == CommandState.SubMode.VISUAL_LINE) {
       VimPlugin.getVisualMotion().toggleVisual(editor, 1, 0, CommandState.SubMode.VISUAL_CHARACTER)
     }
 

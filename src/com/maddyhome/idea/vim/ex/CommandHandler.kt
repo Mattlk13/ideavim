@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,9 +24,9 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.Ref
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.helper.Msg
+import com.maddyhome.idea.vim.helper.exitVisualMode
 import com.maddyhome.idea.vim.helper.inVisualMode
 import com.maddyhome.idea.vim.helper.noneOfEnum
 import java.util.*
@@ -36,7 +36,6 @@ import java.util.*
  */
 sealed class CommandHandler {
 
-  abstract val names: Array<CommandName>
   abstract val argFlags: CommandHandlerFlags
   protected open val optFlags: EnumSet<CommandFlags> = noneOfEnum()
 
@@ -48,23 +47,22 @@ sealed class CommandHandler {
     abstract fun execute(editor: Editor, context: DataContext, cmd: ExCommand): Boolean
   }
 
-  fun register() {
-    CommandParser.getInstance().addHandler(this)
-  }
-
   enum class RangeFlag {
     /**
      * Indicates that a range must be specified with this command
      */
     RANGE_REQUIRED,
+
     /**
      * Indicates that a range is optional for this command
      */
     RANGE_OPTIONAL,
+
     /**
      * Indicates that a range can't be specified for this command
      */
     RANGE_FORBIDDEN,
+
     /**
      * Indicates that the command takes a count, not a range - effects default
      * Works like RANGE_OPTIONAL
@@ -77,10 +75,12 @@ sealed class CommandHandler {
      * Indicates that an argument must be specified with this command
      */
     ARGUMENT_REQUIRED,
+
     /**
      * Indicates that an argument is optional for this command
      */
     ARGUMENT_OPTIONAL,
+
     /**
      * Indicates that an argument can't be specified for this command
      */
@@ -92,10 +92,12 @@ sealed class CommandHandler {
      * Indicates that this is a command that modifies the editor
      */
     WRITABLE,
+
     /**
      * Indicates that this command does not modify the editor
      */
     READ_ONLY,
+
     /**
      * Indicates that this command handles writability by itself
      */
@@ -126,6 +128,46 @@ sealed class CommandHandler {
   @Throws(ExException::class)
   fun process(editor: Editor, context: DataContext, cmd: ExCommand, count: Int): Boolean {
 
+    checkArgs(cmd)
+
+    if (editor.inVisualMode && Flag.SAVE_VISUAL !in argFlags.flags) {
+      editor.exitVisualMode()
+    }
+
+    val res = Ref.create(true)
+    try {
+      when (this) {
+        is ForEachCaret -> {
+          editor.caretModel.runForEachCaret(
+            { caret ->
+              var i = 0
+              while (i++ < count && res.get()) {
+                res.set(execute(editor, caret, context, cmd))
+              }
+            },
+            true
+          )
+        }
+        is SingleExecution -> {
+          var i = 0
+          while (i++ < count && res.get()) {
+            res.set(execute(editor, context, cmd))
+          }
+        }
+      }
+
+      if (!res.get()) {
+        VimPlugin.indicateError()
+      }
+      return res.get()
+    } catch (e: ExException) {
+      VimPlugin.showMessage(e.message)
+      VimPlugin.indicateError()
+      return false
+    }
+  }
+
+  private fun checkArgs(cmd: ExCommand) {
     // No range allowed
     if (RangeFlag.RANGE_FORBIDDEN == argFlags.rangeFlag && cmd.ranges.size() != 0) {
       VimPlugin.showMessage(MessageHelper.message(Msg.e_norange))
@@ -151,39 +193,6 @@ sealed class CommandHandler {
       VimPlugin.showMessage(MessageHelper.message(Msg.e_argforb))
       throw NoArgumentAllowedException()
     }
-    CommandState.getInstance(editor).flags = optFlags
-    if (editor.inVisualMode && Flag.SAVE_VISUAL !in argFlags.flags) {
-      VimPlugin.getVisualMotion().exitVisual(editor)
-    }
-
-    val res = Ref.create(true)
-    try {
-      when (this) {
-        is ForEachCaret -> {
-          editor.caretModel.runForEachCaret({ caret ->
-            var i = 0
-            while (i++ < count && res.get()) {
-              res.set(execute(editor, caret, context, cmd))
-            }
-          }, true)
-        }
-        is SingleExecution -> {
-          var i = 0
-          while (i++ < count && res.get()) {
-            res.set(execute(editor, context, cmd))
-          }
-        }
-      }
-
-      if (!res.get()) {
-        VimPlugin.indicateError()
-      }
-      return res.get()
-    } catch (e: ExException) {
-      VimPlugin.showMessage(e.message)
-      VimPlugin.indicateError()
-      return false
-    }
   }
 }
 
@@ -191,5 +200,5 @@ data class CommandHandlerFlags(
   val rangeFlag: CommandHandler.RangeFlag,
   val argumentFlag: CommandHandler.ArgumentFlag,
   val access: CommandHandler.Access,
-  val flags: Set<CommandHandler.Flag>
+  val flags: Set<CommandHandler.Flag>,
 )

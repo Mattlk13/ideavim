@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,18 +18,19 @@
 
 package org.jetbrains.plugins.ideavim.action.motion.gn;
 
+import com.intellij.idea.TestFor;
 import com.maddyhome.idea.vim.VimPlugin;
-import com.maddyhome.idea.vim.command.CommandFlags;
+import com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction;
 import com.maddyhome.idea.vim.command.CommandState;
-import com.maddyhome.idea.vim.helper.VimTestFunction;
+import com.maddyhome.idea.vim.helper.Direction;
+import org.jetbrains.plugins.ideavim.SkipNeovimReason;
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim;
 import org.jetbrains.plugins.ideavim.VimTestCase;
-
-import java.util.EnumSet;
 
 import static com.maddyhome.idea.vim.helper.StringHelper.parseKeys;
 
 public class VisualSelectNextSearchTest extends VimTestCase {
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testSearch() {
     typeTextInFile(parseKeys("*", "b", "gn"), "h<caret>ello world\nhello world hello world");
 
@@ -38,7 +39,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testSearchMulticaret() {
     typeTextInFile(parseKeys("*", "b", "gn"), "h<caret>ello world\nh<caret>ello world hello world");
 
@@ -46,7 +47,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testSearchFordAndBack() {
     typeTextInFile(parseKeys("*", "2b", "gn", "gN"), "h<caret>ello world\nhello world hello world");
 
@@ -55,9 +56,10 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
+  @TestWithoutNeovim(reason = SkipNeovimReason.UNCLEAR)
   public void testWithoutSpaces() {
     configureByText("test<caret>test");
-    VimPlugin.getSearch().search(myFixture.getEditor(), "test", 1, EnumSet.noneOf(CommandFlags.class), false);
+    VimPlugin.getSearch().setLastSearchState(myFixture.getEditor(), "test", "", Direction.FORWARDS);
     typeText(parseKeys("gn"));
 
     assertOffset(7);
@@ -65,7 +67,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testSearchCurrentlyInOne() {
     typeTextInFile(parseKeys("*", "gn"), "h<caret>ello world\nhello world hello world");
 
@@ -74,7 +76,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testSearchTwice() {
     typeTextInFile(parseKeys("*", "2gn"), "h<caret>ello world\nhello world hello, hello");
 
@@ -82,7 +84,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertSelection("hello");
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testSearchTwiceInVisual() {
     typeTextInFile(parseKeys("*", "gn", "2gn"), "h<caret>ello world\nhello world hello, hello hello");
 
@@ -90,7 +92,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertSelection("hello world hello, hello");
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testTwoSearchesStayInVisualMode() {
     typeTextInFile(parseKeys("*", "gn", "gn"), "h<caret>ello world\nhello world hello, hello");
 
@@ -99,7 +101,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testCanExitVisualMode() {
     typeTextInFile(parseKeys("*", "gn", "gn", "<Esc>"), "h<caret>ello world\nhello world hello, hello");
 
@@ -115,7 +117,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertSelection(null);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testIfInLastPositionOfSearchAndInNormalModeThenSelectCurrent() {
     typeTextInFile(parseKeys("*0e", "gn"), "h<caret>ello hello");
 
@@ -124,7 +126,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testIfInMiddlePositionOfSearchAndInVisualModeThenSelectCurrent() {
     typeTextInFile(parseKeys("*0llv", "gn"), "h<caret>ello hello");
 
@@ -133,7 +135,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testIfInLastPositionOfSearchAndInVisualModeThenSelectNext() {
     typeTextInFile(parseKeys("*0ev", "gn"), "h<caret>ello hello");
 
@@ -142,7 +144,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testMixWithN() {
     typeTextInFile(parseKeys("*", "gn", "n", "gn"), "h<caret>ello world\nhello world hello, hello");
 
@@ -151,7 +153,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testMixWithPreviousSearch() {
     typeTextInFile(parseKeys("*", "gn", "gn", "gN", "gn"), "h<caret>ello world\nhello world hello, hello");
 
@@ -160,7 +162,7 @@ public class VisualSelectNextSearchTest extends VimTestCase {
     assertMode(CommandState.Mode.VISUAL);
   }
 
-  @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction")
+  @TestFor(classes = {SearchWholeWordForwardAction.class})
   public void testSearchWithTabs() {
     typeTextInFile(parseKeys("*", "gn"), "\tf<caret>oo");
     assertSelection("foo");

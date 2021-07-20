@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,41 +20,47 @@ package org.jetbrains.plugins.ideavim.action.change.insert
 
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 class VisualBlockAppendActionTest : VimTestCase() {
+  @TestWithoutNeovim(SkipNeovimReason.DIFFERENT)
   fun `test visual block append`() {
     val before = """
             ${c}int a;
             int b;
             int c;
-            """.trimIndent()
+    """.trimIndent()
     typeTextInFile(parseKeys("<C-V>", "2j", "e", "A", " const", "<Esc>"), before)
     val after = """
             int const a;
             int const b;
             int const c;
-            """.trimIndent()
-    myFixture.checkResult(after)
+    """.trimIndent()
+    assertState(after)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.DIFFERENT)
   fun `test visual block append with dollar motion`() {
     val before = """
             ${c}int a;
             private String b;
             int c;
-            """.trimIndent()
+    """.trimIndent()
     typeTextInFile(parseKeys("<C-V>", "2j", "$", "A", " // My variables", "<Esc>"), before)
     val after = """
             int a; // My variables
             private String b; // My variables
             int c; // My variables
-            """.trimIndent()
-    myFixture.checkResult(after)
+    """.trimIndent()
+    assertState(after)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.MULTICARET)
   fun `test append in non block mode`() {
-    doTest(parseKeys("vwAHello<esc>"),
+    doTest(
+      "vwAHello<esc>",
       """
                 ${c}A Discovery
 
@@ -62,7 +68,7 @@ class VisualBlockAppendActionTest : VimTestCase() {
                 all rocks and ${c}lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A DiscoveryHell${c}o
 
@@ -70,9 +76,10 @@ class VisualBlockAppendActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,Hell${c}o
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 }

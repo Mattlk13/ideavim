@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,54 +22,68 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.action.MotionEditorAction
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.command.MappingMode
+import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.handler.Motion
 import com.maddyhome.idea.vim.handler.MotionActionHandler
+import com.maddyhome.idea.vim.handler.toMotion
+import com.maddyhome.idea.vim.helper.enumSetOf
 import com.maddyhome.idea.vim.helper.inInsertMode
+import com.maddyhome.idea.vim.helper.inVisualMode
 import com.maddyhome.idea.vim.option.OptionsManager
 import java.util.*
-import javax.swing.KeyStroke
 
-class MotionGotoLineLastEndAction : MotionEditorAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.NVO
+class MotionGotoLineLastEndAction : MotionActionHandler.ForEachCaret() {
+  override val motionType: MotionType = MotionType.LINE_WISE
 
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("<C-End>")
+  override val flags: EnumSet<CommandFlags> = enumSetOf(CommandFlags.FLAG_SAVE_JUMP)
 
-  override val flags: EnumSet<CommandFlags> = EnumSet.of(CommandFlags.FLAG_MOT_LINEWISE, CommandFlags.FLAG_SAVE_JUMP)
-
-  override fun makeActionHandler(): MotionActionHandler = MotionGotoLineLastEndActionHandler
-}
-
-class MotionGotoLineLastEndInsertAction : MotionEditorAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.I
-
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("<C-End>")
-
-  override val flags: EnumSet<CommandFlags> = EnumSet.of(CommandFlags.FLAG_CLEAR_STROKES)
-
-  override fun makeActionHandler(): MotionActionHandler = MotionGotoLineLastEndActionHandler
-}
-
-private object MotionGotoLineLastEndActionHandler : MotionActionHandler.ForEachCaret() {
-  override fun getOffset(editor: Editor,
-                         caret: Caret,
-                         context: DataContext,
-                         count: Int,
-                         rawCount: Int,
-                         argument: Argument?): Int {
+  override fun getOffset(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): Motion {
     var allow = false
     if (editor.inInsertMode) {
       allow = true
-    } else if (CommandState.getInstance(editor).mode == CommandState.Mode.VISUAL) {
+    } else if (editor.inVisualMode) {
       val opt = OptionsManager.selection
       if (opt.value != "old") {
         allow = true
       }
     }
 
-    return VimPlugin.getMotion().moveCaretGotoLineLastEnd(editor, rawCount, count - 1, allow)
+    return VimPlugin.getMotion().moveCaretGotoLineLastEnd(editor, rawCount, count - 1, allow).toMotion()
+  }
+}
+
+class MotionGotoLineLastEndInsertAction : MotionActionHandler.ForEachCaret() {
+  override val motionType: MotionType = MotionType.EXCLUSIVE
+
+  override val flags: EnumSet<CommandFlags> = enumSetOf(CommandFlags.FLAG_CLEAR_STROKES)
+
+  override fun getOffset(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): Motion {
+    var allow = false
+    if (editor.inInsertMode) {
+      allow = true
+    } else if (editor.inVisualMode) {
+      val opt = OptionsManager.selection
+      if (opt.value != "old") {
+        allow = true
+      }
+    }
+
+    return VimPlugin.getMotion().moveCaretGotoLineLastEnd(editor, rawCount, count - 1, allow).toMotion()
   }
 }

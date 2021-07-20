@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,39 +21,13 @@ package com.maddyhome.idea.vim.action.copy
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.action.VimCommandAction
 import com.maddyhome.idea.vim.command.Command
-import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.command.MappingMode
 import com.maddyhome.idea.vim.handler.VimActionHandler
-import com.maddyhome.idea.vim.helper.enumSetOf
-import java.util.*
-import javax.swing.KeyStroke
 
-
-class YankLineAction : VimCommandAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.N
-
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("Y")
+class YankLineAction : VimActionHandler.SingleExecution() {
 
   override val type: Command.Type = Command.Type.COPY
 
-  override fun makeActionHandler(): VimActionHandler = YankLineActionHandler
-}
-
-class YankLineMidCountAction : VimCommandAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.N
-
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("yy")
-
-  override val type: Command.Type = Command.Type.COPY
-
-  override val flags: EnumSet<CommandFlags> = enumSetOf(CommandFlags.FLAG_ALLOW_MID_COUNT)
-
-  override fun makeActionHandler(): VimActionHandler = YankLineActionHandler
-}
-
-private object YankLineActionHandler : VimActionHandler.SingleExecution() {
   override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
     return VimPlugin.getYank().yankLine(editor, cmd.count)
   }

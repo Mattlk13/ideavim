@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,23 +18,33 @@
 
 package com.maddyhome.idea.vim.group;
 
+import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.RoamingType;
+import com.intellij.openapi.components.State;
+import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.diagnostic.Logger;
 import com.maddyhome.idea.vim.helper.StringHelper;
 import com.maddyhome.idea.vim.option.NumberOption;
 import com.maddyhome.idea.vim.option.OptionsManager;
 import org.jdom.Element;
+import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class HistoryGroup {
-  public static final String SEARCH = "search";
-  public static final String COMMAND = "cmd";
-  public static final String EXPRESSION = "expr";
-  public static final String INPUT = "input";
+@State(name = "VimHistorySettings", storages = {
+  @Storage(value = "$APP_CONFIG$/vim_settings_local.xml", roamingType = RoamingType.DISABLED)
+})
+public class HistoryGroup implements PersistentStateComponent<Element> {
+  public static final @NonNls String SEARCH = "search";
+  public static final @NonNls String COMMAND = "cmd";
+  public static final @NonNls String EXPRESSION = "expr";
+  public static final @NonNls String INPUT = "input";
 
   public void addEntry(String key, @NotNull String text) {
     if (logger.isDebugEnabled()) {
@@ -45,8 +55,7 @@ public class HistoryGroup {
     block.addEntry(text);
   }
 
-  @NotNull
-  public List<HistoryEntry> getEntries(String key, int first, int last) {
+  public @NotNull List<HistoryEntry> getEntries(String key, int first, int last) {
     HistoryBlock block = blocks(key);
 
     List<HistoryEntry> entries = block.getEntries();
@@ -150,7 +159,6 @@ public class HistoryGroup {
 
     final Element root = element.getChild("history-" + key);
     if (root != null) {
-      //noinspection unchecked
       List<Element> items = root.getChildren("entry");
       for (Element item : items) {
         final String text = StringHelper.getSafeXmlText(item);
@@ -165,6 +173,24 @@ public class HistoryGroup {
     NumberOption opt = OptionsManager.INSTANCE.getHistory();
 
     return opt.value();
+  }
+
+  @Nullable
+  @Override
+  public Element getState() {
+    Element element = new Element("history");
+    saveData(element);
+    return element;
+  }
+
+  @Override
+  public void loadState(@NotNull Element state) {
+    readData(state);
+  }
+
+  @TestOnly
+  public void clear() {
+    histories.clear();
   }
 
   private static class HistoryBlock {
@@ -184,12 +210,11 @@ public class HistoryGroup {
       }
     }
 
-    @NotNull
-    public List<HistoryEntry> getEntries() {
+    public @NotNull List<HistoryEntry> getEntries() {
       return entries;
     }
 
-    @NotNull private final List<HistoryEntry> entries = new ArrayList<>();
+    private final @NotNull List<HistoryEntry> entries = new ArrayList<>();
     private int counter;
   }
 
@@ -203,16 +228,15 @@ public class HistoryGroup {
       return number;
     }
 
-    @NotNull
-    public String getEntry() {
+    public @NotNull String getEntry() {
       return entry;
     }
 
     private final int number;
-    @NotNull private final String entry;
+    private final @NotNull String entry;
   }
 
-  @NotNull private final Map<String, HistoryBlock> histories = new HashMap<>();
+  private final @NotNull Map<String, HistoryBlock> histories = new HashMap<>();
 
   private static final Logger logger = Logger.getInstance(HistoryGroup.class.getName());
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,15 +18,19 @@
 
 package com.maddyhome.idea.vim.group;
 
-import com.google.common.collect.ImmutableList;
 import com.intellij.codeInsight.editorActions.CopyPastePostProcessor;
 import com.intellij.codeInsight.editorActions.CopyPastePreProcessor;
 import com.intellij.codeInsight.editorActions.TextBlockTransferable;
 import com.intellij.codeInsight.editorActions.TextBlockTransferableData;
-import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.RoamingType;
+import com.intellij.openapi.components.State;
+import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.CaretStateTransferableData;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.richcopy.view.HtmlTransferableData;
+import com.intellij.openapi.editor.richcopy.view.RtfTransferableData;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.project.Project;
@@ -49,6 +53,7 @@ import com.maddyhome.idea.vim.command.CommandState;
 import com.maddyhome.idea.vim.command.SelectionType;
 import com.maddyhome.idea.vim.common.Register;
 import com.maddyhome.idea.vim.common.TextRange;
+import com.maddyhome.idea.vim.handler.EditorActionHandlerBase;
 import com.maddyhome.idea.vim.helper.EditorHelper;
 import com.maddyhome.idea.vim.helper.StringHelper;
 import com.maddyhome.idea.vim.option.ListOption;
@@ -56,6 +61,7 @@ import com.maddyhome.idea.vim.option.OptionsManager;
 import com.maddyhome.idea.vim.ui.ClipboardHandler;
 import kotlin.Pair;
 import org.jdom.Element;
+import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -70,37 +76,54 @@ import java.util.stream.Collectors;
 /**
  * This group works with command associated with copying and pasting text
  */
-public class RegisterGroup {
-  private static final String WRITABLE_REGISTERS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-*+_/\"";
-  private static final String READONLY_REGISTERS = ":.%#=/";
-  private static final String RECORDABLE_REGISTER = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  private static final String PLAYBACK_REGISTER = RECORDABLE_REGISTER + "\".*+";
-  private static final String VALID_REGISTERS = WRITABLE_REGISTERS + READONLY_REGISTERS;
-  private static final List<Character> CLIPBOARD_REGISTERS = ImmutableList.of('*', '+');
+@State(name = "VimRegisterSettings", storages = {
+  @Storage(value = "$APP_CONFIG$/vim_settings_local.xml", roamingType = RoamingType.DISABLED)
+})
+public class RegisterGroup implements PersistentStateComponent<Element> {
+  public static final char UNNAMED_REGISTER = '"';
+  public static final char LAST_SEARCH_REGISTER = '/';        // IdeaVim does not supporting writing to this register
+  public static final char LAST_COMMAND_REGISTER = ':';
+  public static final char LAST_INSERTED_TEXT_REGISTER = '.';
+  public static final char SMALL_DELETION_REGISTER = '-';
+  public static final char BLACK_HOLE_REGISTER = '_';
+  public static final char ALTERNATE_BUFFER_REGISTER = '#';  // Not supported
+  public static final char EXPRESSION_BUFFER_REGISTER = '='; // Not supported
+  public static final char CURRENT_FILENAME_REGISTER = '%';  // Not supported
+  public static final @NonNls String CLIPBOARD_REGISTERS = "*+";
+  private static final @NonNls String NUMBERED_REGISTERS = "0123456789";
+  private static final @NonNls String NAMED_REGISTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  private static final @NonNls String WRITABLE_REGISTERS = NUMBERED_REGISTERS + NAMED_REGISTERS + CLIPBOARD_REGISTERS
+    + SMALL_DELETION_REGISTER + BLACK_HOLE_REGISTER + UNNAMED_REGISTER + LAST_SEARCH_REGISTER;
+  private static final String READONLY_REGISTERS = ""
+    + CURRENT_FILENAME_REGISTER + LAST_COMMAND_REGISTER + LAST_INSERTED_TEXT_REGISTER + ALTERNATE_BUFFER_REGISTER
+    + EXPRESSION_BUFFER_REGISTER; // Expression buffer is not actually readonly
+  private static final @NonNls String RECORDABLE_REGISTERS = NUMBERED_REGISTERS + NAMED_REGISTERS;
+  private static final String PLAYBACK_REGISTERS = RECORDABLE_REGISTERS + UNNAMED_REGISTER + CLIPBOARD_REGISTERS + LAST_INSERTED_TEXT_REGISTER;
+  public static final String VALID_REGISTERS = WRITABLE_REGISTERS + READONLY_REGISTERS;
+
   private static final Logger logger = Logger.getInstance(RegisterGroup.class.getName());
 
-  private char defaultRegister = '"';
+  private final @NotNull HashMap<Character, Register> registers = new HashMap<>();
+  private char defaultRegister = UNNAMED_REGISTER;
   private char lastRegister = defaultRegister;
-  @NotNull private final HashMap<Character, Register> registers = new HashMap<>();
   private char recordRegister = 0;
-  @Nullable private List<KeyStroke> recordList = null;
+  private @Nullable List<KeyStroke> recordList = null;
 
   public RegisterGroup() {
     final ListOption clipboardOption = OptionsManager.INSTANCE.getClipboard();
-    if (clipboardOption != null) {
-      clipboardOption.addOptionChangeListener(event -> {
-        if (clipboardOption.contains("unnamed")) {
-          defaultRegister = '*';
-        }
-        else if (clipboardOption.contains("unnamedplus")) {
-          defaultRegister = '+';
-        }
-        else {
-          defaultRegister = '"';
-        }
-        lastRegister = defaultRegister;
-      });
-    }
+    clipboardOption.addOptionChangeListenerAndExecute((oldValue, newValue) -> {
+      if (clipboardOption.contains("unnamed")) {
+        defaultRegister = '*';
+      }
+      else if (clipboardOption.contains("unnamedplus")) {
+        defaultRegister = '+';
+      }
+      else {
+        defaultRegister = UNNAMED_REGISTER;
+      }
+      lastRegister = defaultRegister;
+    });
   }
 
   /**
@@ -110,6 +133,10 @@ public class RegisterGroup {
     return READONLY_REGISTERS.indexOf(lastRegister) < 0;
   }
 
+  public boolean isValid(char reg) {
+    return VALID_REGISTERS.indexOf(reg) != -1;
+  }
+
   /**
    * Store which register the user wishes to work with.
    *
@@ -117,7 +144,7 @@ public class RegisterGroup {
    * @return true if a valid register name, false if not
    */
   public boolean selectRegister(char reg) {
-    if (VALID_REGISTERS.indexOf(reg) != -1) {
+    if (isValid(reg)) {
       lastRegister = reg;
       if (logger.isDebugEnabled()) logger.debug("register selected: " + lastRegister);
 
@@ -154,19 +181,54 @@ public class RegisterGroup {
     if (isRegisterWritable()) {
       String text = EditorHelper.getText(editor, range);
 
+      if (type == SelectionType.LINE_WISE && (text.length() == 0 || text.charAt(text.length() - 1) != '\n')) {
+        // Linewise selection always has a new line at the end
+        text += '\n';
+      }
+
       return storeTextInternal(editor, range, text, type, lastRegister, isDelete);
     }
 
     return false;
   }
 
-  public boolean storeTextInternal(@NotNull Editor editor, @NotNull TextRange range, @NotNull String text,
-                                   @NotNull SelectionType type, char register, boolean isDelete) {
-    // Null register doesn't get saved
-    if (lastRegister == '_') return true;
+  /**
+   * Stores text, character wise, in the given special register
+   *
+   * <p>This method is intended to support writing to registers when the text cannot be yanked from an editor. This is
+   * expected to only be used to update the search and command registers. It will not update named registers.</p>
+   *
+   * <p>While this method allows setting the unnamed register, this should only be done from tests, and only when it's
+   * not possible to yank or cut from the fixture editor. This method will skip additional text processing, and won't
+   * update other registers such as the small delete register or reorder the numbered registers. It is much more
+   * preferable to yank from the fixture editor.</p>
+   *
+   * @param register  The register to use for storing the text. Cannot be a normal text register
+   * @param text      The text to store, without further processing
+   * @return          True if the text is stored, false if the passed register is not supported
+   */
+  public boolean storeTextSpecial(char register, @NotNull String text) {
+    if (READONLY_REGISTERS.indexOf(register) == -1 && register != LAST_SEARCH_REGISTER
+        && register != UNNAMED_REGISTER) {
+      return false;
+    }
+    registers.put(register, new Register(register, SelectionType.CHARACTER_WISE, text, new ArrayList<>()));
+    if (logger.isDebugEnabled()) logger.debug("register '" + register + "' contains: \"" + text + "\"");
+    return true;
+  }
+
+  private boolean storeTextInternal(@NotNull Editor editor, @NotNull TextRange range, @NotNull String text,
+                                    @NotNull SelectionType type, char register, boolean isDelete) {
+    // Null register doesn't get saved, but acts like it was
+    if (lastRegister == BLACK_HOLE_REGISTER) return true;
 
     int start = range.getStartOffset();
     int end = range.getEndOffset();
+
+    if (isDelete && start == end) {
+      return true;
+    }
+
     // Normalize the start and end
     if (start > end) {
       int t = start;
@@ -201,18 +263,18 @@ public class RegisterGroup {
       if (logger.isDebugEnabled()) logger.debug("register '" + register + "' contains: \"" + processedText + "\"");
     }
 
-    if (CLIPBOARD_REGISTERS.contains(register)) {
+    if (CLIPBOARD_REGISTERS.indexOf(register) >= 0) {
       ClipboardHandler.setClipboardText(processedText, new ArrayList<>(transferableData), text);
     }
 
-    // Also add it to the default register if the default wasn't specified
-    if (register != defaultRegister && ".:/".indexOf(register) == -1) {
-      registers.put(defaultRegister, new Register(defaultRegister, type, processedText, new ArrayList<>(transferableData)));
-      if (logger.isDebugEnabled()) logger.debug("register '" + register + "' contains: \"" + processedText + "\"");
+    // Also add it to the unnamed register if the default wasn't specified
+    if (register != UNNAMED_REGISTER && ".:/".indexOf(register) == -1) {
+      registers.put(UNNAMED_REGISTER, new Register(UNNAMED_REGISTER, type, processedText, new ArrayList<>(transferableData)));
+      if (logger.isDebugEnabled()) logger.debug("register '" + UNNAMED_REGISTER + "' contains: \"" + processedText + "\"");
     }
 
     if (isDelete) {
-      boolean smallInlineDeletion = type == SelectionType.CHARACTER_WISE &&
+      boolean smallInlineDeletion = (type == SelectionType.CHARACTER_WISE ||  type == SelectionType.BLOCK_WISE ) &&
                        editor.offsetToLogicalPosition(start).line == editor.offsetToLogicalPosition(end).line;
 
       // Deletes go into numbered registers only if text is smaller than a line, register is used or it's a special case
@@ -221,7 +283,7 @@ public class RegisterGroup {
         for (char d = '8'; d >= '1'; d--) {
           Register t = registers.get(d);
           if (t != null) {
-            t.rename((char)(d + 1));
+            t.setName((char)(d + 1));
             registers.put((char)(d + 1), t);
           }
         }
@@ -230,7 +292,7 @@ public class RegisterGroup {
 
       // Deletes smaller than one line and without specified register go the the "-" register
       if (smallInlineDeletion && register == defaultRegister) {
-        registers.put('-', new Register('-', type, processedText, new ArrayList<>(transferableData)));
+        registers.put(SMALL_DELETION_REGISTER, new Register(SMALL_DELETION_REGISTER, type, processedText, new ArrayList<>(transferableData)));
       }
     }
     // Yanks also go to register 0 if the default register was used
@@ -240,16 +302,15 @@ public class RegisterGroup {
     }
 
     if (start != -1) {
-      VimPlugin.getMark().setChangeMarks(editor, new TextRange(start, Math.max(end - 1, 0)));
+      VimPlugin.getMark().setChangeMarks(editor, new TextRange(start, end));
     }
 
     return true;
   }
 
-  @NotNull
-  public List<TextBlockTransferableData> getTransferableData(@NotNull Editor editor,
-                                                              @NotNull TextRange textRange,
-                                                              String text) {
+  public @NotNull List<TextBlockTransferableData> getTransferableData(@NotNull Editor editor,
+                                                                      @NotNull TextRange textRange,
+                                                                      String text) {
     final List<TextBlockTransferableData> transferableDatas = new ArrayList<>();
     final Project project = editor.getProject();
     if (project == null) return new ArrayList<>();
@@ -267,6 +328,12 @@ public class RegisterGroup {
       }
     });
     transferableDatas.add(new CaretStateTransferableData(new int[]{0}, new int[]{text.length()}));
+
+    // These data provided by {@link com.intellij.openapi.editor.richcopy.TextWithMarkupProcessor} doesn't work with
+    //   IdeaVim and I don't see a way to fix it
+    // See https://youtrack.jetbrains.com/issue/VIM-1785
+    // See https://youtrack.jetbrains.com/issue/VIM-1731
+    transferableDatas.removeIf(it -> (it instanceof RtfTransferableData) || (it instanceof HtmlTransferableData));
     return transferableDatas;
   }
 
@@ -277,30 +344,34 @@ public class RegisterGroup {
     final PsiFile file = PsiDocumentManager.getInstance(project).getPsiFile(editor.getDocument());
     if (file == null) return text;
     String rawText = TextBlockTransferable.convertLineSeparators(text, "\n", transferableDatas);
-    String escapedText;
-    for (CopyPastePreProcessor processor : CopyPastePreProcessor.EP_NAME.getExtensionList()) {
-      escapedText = processor.preprocessOnCopy(file, textRange.getStartOffsets(), textRange.getEndOffsets(), rawText);
-      if (escapedText != null) {
-        return escapedText;
+
+
+    if (OptionsManager.INSTANCE.getIdeacopypreprocess().getValue()) {
+      String escapedText;
+      for (CopyPastePreProcessor processor : CopyPastePreProcessor.EP_NAME.getExtensionList()) {
+        escapedText = processor.preprocessOnCopy(file, textRange.getStartOffsets(), textRange.getEndOffsets(), rawText);
+        if (escapedText != null) {
+          return escapedText;
+        }
       }
     }
+
+
     return text;
   }
 
   private boolean isSmallDeletionSpecialCase(Editor editor) {
-    Command currentCommand = CommandState.getInstance(editor).getCommand();
+    Command currentCommand = CommandState.getInstance(editor).getExecutingCommand();
     if (currentCommand != null) {
       Argument argument = currentCommand.getArgument();
       if (argument != null) {
         Command motionCommand = argument.getMotion();
-        if (motionCommand != null) {
-          AnAction action = motionCommand.getAction();
-          return action instanceof MotionPercentOrMatchAction || action instanceof MotionSentencePreviousStartAction
-            || action instanceof MotionSentenceNextStartAction || action instanceof MotionGotoFileMarkAction
-            || action instanceof SearchEntryFwdAction || action instanceof SearchEntryRevAction
-            || action instanceof SearchAgainNextAction || action instanceof SearchAgainPreviousAction
-            || action instanceof MotionParagraphNextAction || action instanceof MotionParagraphPreviousAction;
-        }
+        EditorActionHandlerBase action = motionCommand.getAction();
+        return action instanceof MotionPercentOrMatchAction || action instanceof MotionSentencePreviousStartAction
+          || action instanceof MotionSentenceNextStartAction || action instanceof MotionGotoFileMarkAction
+          || action instanceof SearchEntryFwdAction || action instanceof SearchEntryRevAction
+          || action instanceof SearchAgainNextAction || action instanceof SearchAgainPreviousAction
+          || action instanceof MotionParagraphNextAction || action instanceof MotionParagraphPreviousAction;
       }
     }
 
@@ -312,14 +383,12 @@ public class RegisterGroup {
    *
    * @return The register, null if no such register
    */
-  @Nullable
-  public Register getLastRegister() {
+  public @Nullable Register getLastRegister() {
     return getRegister(lastRegister);
   }
 
-  @Nullable
-  public Register getPlaybackRegister(char r) {
-    if (PLAYBACK_REGISTER.indexOf(r) != 0) {
+  public @Nullable Register getPlaybackRegister(char r) {
+    if (PLAYBACK_REGISTERS.indexOf(r) != 0) {
       return getRegister(r);
     }
     else {
@@ -327,13 +396,23 @@ public class RegisterGroup {
     }
   }
 
-  @Nullable
-  public Register getRegister(char r) {
+  public @Nullable Register getRegister(char r) {
     // Uppercase registers actually get the lowercase register
     if (Character.isUpperCase(r)) {
       r = Character.toLowerCase(r);
     }
-    return CLIPBOARD_REGISTERS.contains(r) ? refreshClipboardRegister(r) : registers.get(r);
+    return CLIPBOARD_REGISTERS.indexOf(r) >= 0 ? refreshClipboardRegister(r) : registers.get(r);
+  }
+
+  public void saveRegister(char r, Register register) {
+    // Uppercase registers actually get the lowercase register
+    if (Character.isUpperCase(r)) {
+      r = Character.toLowerCase(r);
+    }
+    if (CLIPBOARD_REGISTERS.indexOf(r) >= 0) {
+      ClipboardHandler.setClipboardText(register.getText(), new ArrayList<>(register.getTransferableData()), register.getRawText());
+    }
+    registers.put(r, register);
   }
 
   /**
@@ -352,21 +431,21 @@ public class RegisterGroup {
     return defaultRegister;
   }
 
-  @NotNull
-  public List<Register> getRegisters() {
+  public @NotNull List<Register> getRegisters() {
     final List<Register> res = new ArrayList<>(registers.values());
-    for (Character r : CLIPBOARD_REGISTERS) {
+    for (int i = 0; i < CLIPBOARD_REGISTERS.length(); i++) {
+      final char r = CLIPBOARD_REGISTERS.charAt(i);
       final Register register = refreshClipboardRegister(r);
       if (register != null) {
         res.add(register);
       }
     }
-    res.sort(new Register.KeySorter());
+    res.sort(Register.KeySorter.INSTANCE);
     return res;
   }
 
   public boolean startRecording(Editor editor, char register) {
-    if (RECORDABLE_REGISTER.indexOf(register) != -1) {
+    if (RECORDABLE_REGISTERS.indexOf(register) != -1) {
       CommandState.getInstance(editor).setRecording(true);
       recordRegister = register;
       recordList = new ArrayList<>();
@@ -393,6 +472,10 @@ public class RegisterGroup {
     registers.put(register, new Register(register, SelectionType.CHARACTER_WISE, keys));
   }
 
+  public void setKeys(char register, @NotNull List<KeyStroke> keys, SelectionType type) {
+    registers.put(register, new Register(register, type, keys));
+  }
+
   public void finishRecording(Editor editor) {
     if (recordRegister != 0) {
       Register reg = null;
@@ -415,7 +498,7 @@ public class RegisterGroup {
     recordRegister = 0;
   }
 
-  public void saveData(@NotNull final Element element) {
+  public void saveData(final @NotNull Element element) {
     logger.debug("saveData");
     final Element registersElement = new Element("registers");
     for (Character key : registers.keySet()) {
@@ -447,7 +530,7 @@ public class RegisterGroup {
     element.addContent(registersElement);
   }
 
-  public void readData(@NotNull final Element element) {
+  public void readData(final @NotNull Element element) {
     logger.debug("readData");
     final Element registersElement = element.getChild("registers");
     if (registersElement != null) {
@@ -487,9 +570,9 @@ public class RegisterGroup {
     }
   }
 
-  @Nullable
-  private Register refreshClipboardRegister(char r) {
+  private @Nullable Register refreshClipboardRegister(char r) {
     final Pair<String, List<TextBlockTransferableData>> clipboardData = ClipboardHandler.getClipboardTextAndTransferableData();
+    if (clipboardData == null) return null;
     final Register currentRegister = registers.get(r);
     final String text = clipboardData.getFirst();
     final List<TextBlockTransferableData> transferableData = clipboardData.getSecond();
@@ -502,13 +585,25 @@ public class RegisterGroup {
     return null;
   }
 
-  @NotNull
-  private SelectionType guessSelectionType(@NotNull String text) {
+  private @NotNull SelectionType guessSelectionType(@NotNull String text) {
     if (text.endsWith("\n")) {
       return SelectionType.LINE_WISE;
     }
     else {
       return SelectionType.CHARACTER_WISE;
     }
+  }
+
+  @Nullable
+  @Override
+  public Element getState() {
+    Element element = new Element("registers");
+    saveData(element);
+    return element;
+  }
+
+  @Override
+  public void loadState(@NotNull Element state) {
+    readData(state);
   }
 }

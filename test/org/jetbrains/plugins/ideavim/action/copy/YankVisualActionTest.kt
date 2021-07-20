@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +25,15 @@ import com.maddyhome.idea.vim.command.SelectionType
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
 import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
 import junit.framework.TestCase
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 import javax.swing.KeyStroke
 
 class YankVisualActionTest : VimTestCase() {
   fun `test simple yank`() {
-    doTest(parseKeys("viw", "y"),
+    doTest(
+      parseKeys("viw", "y"),
       """
                             A Discovery
 
@@ -38,13 +41,15 @@ class YankVisualActionTest : VimTestCase() {
                             all rocks and lavender and tufted grass,
                             where it was settled on some sodden sand
                             hard by the torrent of a mountain pass.
-                            """.trimIndent(),
-      "found", SelectionType.CHARACTER_WISE)
+      """.trimIndent(),
+      "found", SelectionType.CHARACTER_WISE
+    )
   }
 
   @VimBehaviorDiffers("\n")
   fun `test yank empty line`() {
-    doTest(parseKeys("v", "y"),
+    doTest(
+      parseKeys("v", "y"),
       """
                             A Discovery
                             ${c}
@@ -52,13 +57,15 @@ class YankVisualActionTest : VimTestCase() {
                             all rocks and lavender and tufted grass,
                             where it was settled on some sodden sand
                             hard by the torrent of a mountain pass.
-                            """.trimIndent(),
-      "", SelectionType.CHARACTER_WISE)
+      """.trimIndent(),
+      "", SelectionType.CHARACTER_WISE
+    )
   }
 
   @VimBehaviorDiffers("land\n")
   fun `test yank to the end`() {
-    doTest(parseKeys("viwl", "y"),
+    doTest(
+      parseKeys("viwl", "y"),
       """
                             A Discovery
 
@@ -66,12 +73,14 @@ class YankVisualActionTest : VimTestCase() {
                             all rocks and lavender and tufted grass,
                             where it was settled on some sodden sand
                             hard by the torrent of a mountain pass.
-                            """.trimIndent(),
-      "land", SelectionType.CHARACTER_WISE)
+      """.trimIndent(),
+      "land", SelectionType.CHARACTER_WISE
+    )
   }
 
   fun `test yank multicaret`() {
-    doTest(parseKeys("viw", "y"),
+    doTest(
+      parseKeys("viw", "y"),
       """
                             A Discovery
 
@@ -79,18 +88,19 @@ class YankVisualActionTest : VimTestCase() {
                             all rocks and lavender and tufted grass,
                             where it ${c}was settled on some sodden sand
                             hard by the torrent of a mountain pass.
-                            """.trimIndent(),
-      "found\nwas", SelectionType.BLOCK_WISE)
+      """.trimIndent(),
+      "found\nwas", SelectionType.BLOCK_WISE
+    )
   }
 
-
+  @TestWithoutNeovim(SkipNeovimReason.DIFFERENT)
   fun testYankVisualRange() {
     val before = """
             q${c}werty
             asdf${c}gh
             ${c}zxcvbn
 
-            """.trimIndent()
+    """.trimIndent()
     configureByText(before)
     typeText(parseKeys("vey"))
 
@@ -100,17 +110,20 @@ class YankVisualActionTest : VimTestCase() {
     TestCase.assertNotNull(text)
 
     typeText(parseKeys("G", "$", "p"))
-    val after = """qwerty
-asdfgh
-zxcvbn${c}werty
+    val after = """
+      qwerty
+      asdfgh
+      zxcvbn
+      ${c}werty
       gh
       zxcvbn
-"""
-    myFixture.checkResult(after)
+    """.trimIndent()
+    assertState(after)
   }
 
   fun `test yank line`() {
-    doTest(parseKeys("V", "y"),
+    doTest(
+      parseKeys("V", "y"),
       """
                             A Discovery
 
@@ -118,34 +131,42 @@ zxcvbn${c}werty
                             all rocks and lavender and tufted grass,
                             where it was settled on some sodden sand
                             hard by the torrent of a mountain pass.
-                            """.trimIndent(),
-      "I found it in a legendary land\n", SelectionType.LINE_WISE)
+      """.trimIndent(),
+      "I found it in a legendary land\n", SelectionType.LINE_WISE
+    )
   }
 
   fun `test yank last line`() {
-    doTest(parseKeys("V", "y"),
+    doTest(
+      parseKeys("V", "y"),
       """
                             A Discovery
 
                             I found it in a legendary land
                             all rocks and lavender and tufted grass,
                             where it was settled on some sodden sand
-                            hard by ${c}the torrent of a mountain pass.""".trimIndent(),
-      "hard by the torrent of a mountain pass.", SelectionType.LINE_WISE)
+                            hard by ${c}the torrent of a mountain pass.
+      """.trimIndent(),
+      "hard by the torrent of a mountain pass.\n", SelectionType.LINE_WISE
+    )
   }
 
   fun `test yank multicaret line`() {
-    doTest(parseKeys("V", "y"),
+    doTest(
+      parseKeys("V", "y"),
       """
                             A Discovery
 
                             I found it in a legendary land
                             all ${c}rocks and lavender and tufted grass,
                             where it was settled on some sodden sand
-                            hard by ${c}the torrent of a mountain pass.""".trimIndent(),
-      "all rocks and lavender and tufted grass,\nhard by the torrent of a mountain pass.", SelectionType.LINE_WISE)
+                            hard by ${c}the torrent of a mountain pass.
+      """.trimIndent(),
+      "all rocks and lavender and tufted grass,\nhard by the torrent of a mountain pass.\n", SelectionType.LINE_WISE
+    )
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.DIFFERENT)
   fun testYankVisualLines() {
     val before = """
             q${c}we
@@ -155,7 +176,7 @@ zxcvbn${c}werty
             fgh
             vbn
             
-            """.trimIndent()
+    """.trimIndent()
     configureByText(before)
     typeText(parseKeys("Vy"))
 
@@ -163,12 +184,15 @@ zxcvbn${c}werty
     TestCase.assertNotNull(lastRegister)
     val text = lastRegister!!.text
     TestCase.assertNotNull(text)
-    TestCase.assertEquals("""
+    TestCase.assertEquals(
+      """
     qwe
     zxc
     rty
 
-    """.trimIndent(), text)
+      """.trimIndent(),
+      text
+    )
 
     typeText(parseKeys("p"))
     val after = """
@@ -188,24 +212,28 @@ zxcvbn${c}werty
             fgh
             vbn
             
-            """.trimIndent()
-    myFixture.checkResult(after)
+    """.trimIndent()
+    assertState(after)
   }
 
   fun `test block yank`() {
-    doTest(parseKeys("<C-V>lj", "y"),
+    doTest(
+      parseKeys("<C-V>lj", "y"),
       """
                             A Discovery
 
                             I ${c}found it in a legendary land
                             all rocks and lavender and tufted grass,
                             where it was settled on some sodden sand
-                            hard by the torrent of a mountain pass.""".trimIndent(),
-      "fo\nl ", SelectionType.BLOCK_WISE)
+                            hard by the torrent of a mountain pass.
+      """.trimIndent(),
+      "fo\nl ", SelectionType.BLOCK_WISE
+    )
   }
 
   fun `test block yank with dollar motion`() {
-    doTest(parseKeys("<C-V>3j$", "y"),
+    doTest(
+      parseKeys("<C-V>3j$", "y"),
       """
                             A Discovery
 
@@ -213,13 +241,34 @@ zxcvbn${c}werty
                             all rocks and lavender and tufted grass,[ additional symbols]
                             where it was settled on some sodden sand
                             hard by the torrent of a mountain pass.
-                            """.trimIndent(),
+      """.trimIndent(),
       """
                     found it in a legendary land
                     l rocks and lavender and tufted grass,[ additional symbols]
                     ere it was settled on some sodden sand
                     rd by the torrent of a mountain pass.
-                    """.trimIndent(), SelectionType.BLOCK_WISE)
+      """.trimIndent(),
+      SelectionType.BLOCK_WISE
+    )
+  }
+
+  fun `test block yank with dollar motion backward`() {
+    doTest(
+      parseKeys("<C-V>k$", "y"),
+      """
+                            A Discovery
+
+                            I found it in a legendary land
+                            al${c}l rocks and lavender and tufted grass,[ additional symbols]
+                            where it was settled on some sodden sand
+                            hard by the torrent of a mountain pass.
+      """.trimIndent(),
+      """
+                    found it in a legendary land
+                    l rocks and lavender and tufted grass,[ additional symbols]
+      """.trimIndent(),
+      SelectionType.BLOCK_WISE
+    )
   }
 
   private fun doTest(keys: List<KeyStroke>, before: String, expectedText: String, expectedType: SelectionType) {

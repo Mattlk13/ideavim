@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,34 +19,44 @@
 package org.jetbrains.plugins.ideavim.action.change.insert
 
 import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
+import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 class InsertDeleteInsertedTextActionTest : VimTestCase() {
   // VIM-1655
   fun `test deleted text is not yanked`() {
-    doTest(parseKeys("yiw", "ea", "Hello", "<C-U>", "<ESC>p"), """
+    doTest(
+      listOf("yiw", "ea", "Hello", "<C-U>", "<ESC>p"),
+      """
             A Discovery
 
             I found ${c}it in a legendary land
-        """.trimIndent(), """
+      """.trimIndent(),
+      """
             A Discovery
 
             I found iti${c}t in a legendary land
-        """.trimIndent(), CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
+      """.trimIndent(),
+      CommandState.Mode.COMMAND, CommandState.SubMode.NONE
+    )
   }
 
   // VIM-1655
-  // VimBehaviorDiffers. Inserted text is not deleted after <C-U>
+  @VimBehaviorDiffers(description = "Inserted text is not deleted after <C-U>")
   fun `test deleted text is not yanked after replace`() {
-    doTest(parseKeys("yiw", "eR", "Hello", "<C-U>", "<ESC>p"), """
+    doTest(
+      listOf("yiw", "eR", "Hello", "<C-U>", "<ESC>p"),
+      """
             A Discovery
 
             I found ${c}it in a legendary land
-        """.trimIndent(), """
+      """.trimIndent(),
+      """
             A Discovery
 
             I found ii${c}ta legendary land
-        """.trimIndent(), CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
+      """.trimIndent(),
+      CommandState.Mode.COMMAND, CommandState.SubMode.NONE
+    )
   }
 }

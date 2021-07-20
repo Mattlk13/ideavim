@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,18 +26,29 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.editor.*
+import com.intellij.openapi.diagnostic.debug
+import com.intellij.openapi.editor.Caret
+import com.intellij.openapi.editor.CaretStateTransferableData
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.LogicalPosition
+import com.intellij.openapi.editor.RangeMarker
+import com.intellij.openapi.editor.RawText
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.command.SelectionType
+import com.maddyhome.idea.vim.command.isBlock
+import com.maddyhome.idea.vim.command.isChar
+import com.maddyhome.idea.vim.command.isLine
 import com.maddyhome.idea.vim.common.TextRange
 import com.maddyhome.idea.vim.group.MarkGroup
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.group.visual.VimSelection
 import com.maddyhome.idea.vim.helper.EditorHelper
+import com.maddyhome.idea.vim.helper.fileSize
+import com.maddyhome.idea.vim.helper.moveToInlayAwareOffset
 import com.maddyhome.idea.vim.option.ClipboardOptionsData
 import com.maddyhome.idea.vim.option.OptionsManager
 import java.util.*
@@ -53,29 +64,29 @@ data class PutData(
   val visualSelection: VisualSelection?,
   val count: Int,
   val insertTextBeforeCaret: Boolean,
-  private val _indent: Boolean,
+  private val rawIndent: Boolean,
   val caretAfterInsertedText: Boolean,
-  val putToLine: Int = -1
+  val putToLine: Int = -1,
 ) {
   val indent: Boolean =
-    if (_indent && textData?.typeInRegister != SelectionType.LINE_WISE && visualSelection?.typeInEditor != SelectionType.LINE_WISE) false else _indent
+    if (rawIndent && textData?.typeInRegister != SelectionType.LINE_WISE && visualSelection?.typeInEditor != SelectionType.LINE_WISE) false else rawIndent
 
   data class VisualSelection(
     val caretsAndSelections: Map<Caret, VimSelection>,
-    val typeInEditor: SelectionType
+    val typeInEditor: SelectionType,
   )
 
   data class TextData(
     val rawText: String?,
     val typeInRegister: SelectionType,
-    val transferableData: List<TextBlockTransferableData>
+    val transferableData: List<TextBlockTransferableData>,
   )
 }
 
 private data class ProcessedTextData(
   val text: String,
   val typeInRegister: SelectionType,
-  val transferableData: List<TextBlockTransferableData>
+  val transferableData: List<TextBlockTransferableData>,
 )
 
 class PutGroup {
@@ -95,7 +106,7 @@ class PutGroup {
   }
 
   private fun collectPreModificationData(editor: Editor, data: PutData): Map<String, Any> {
-    return if (data.visualSelection != null && data.visualSelection.typeInEditor == SelectionType.BLOCK_WISE) {
+    return if (data.visualSelection != null && data.visualSelection.typeInEditor.isBlock) {
       val vimSelection = data.visualSelection.caretsAndSelections.getValue(editor.caretModel.primaryCaret)
       val selStart = editor.offsetToLogicalPosition(vimSelection.vimStart)
       val selEnd = editor.offsetToLogicalPosition(vimSelection.vimEnd)
@@ -110,15 +121,16 @@ class PutGroup {
   private fun deleteSelectedText(editor: Editor, data: PutData) {
     if (data.visualSelection == null) return
 
-    data.visualSelection.caretsAndSelections.entries.sortedByDescending { it.key.logicalPosition }.forEach { (caret, selection) ->
-      if (!caret.isValid) return@forEach
-      val range = selection.toVimTextRange(false).normalize()
+    data.visualSelection.caretsAndSelections.entries.sortedByDescending { it.key.logicalPosition }
+      .forEach { (caret, selection) ->
+        if (!caret.isValid) return@forEach
+        val range = selection.toVimTextRange(false).normalize()
 
-      ApplicationManager.getApplication().runWriteAction {
-        VimPlugin.getChange().deleteRange(editor, caret, range, selection.type, false)
+        ApplicationManager.getApplication().runWriteAction {
+          VimPlugin.getChange().deleteRange(editor, caret, range, selection.type, false)
+        }
+        caret.moveToInlayAwareOffset(range.startOffset)
       }
-      caret.moveToOffset(range.startOffset)
-    }
   }
 
   private fun processText(editor: Editor, data: PutData): ProcessedTextData? {
@@ -126,19 +138,28 @@ class PutGroup {
       if (data.visualSelection != null) {
         val offset = editor.caretModel.primaryCaret.offset
         VimPlugin.getMark().setMark(editor, MarkGroup.MARK_CHANGE_POS, offset)
-        VimPlugin.getMark().setChangeMarks(editor, TextRange(offset, offset))
+        VimPlugin.getMark().setChangeMarks(editor, TextRange(offset, offset + 1))
       }
       return null
     }
 
-    if (data.visualSelection?.typeInEditor == SelectionType.LINE_WISE && data.textData.typeInRegister == SelectionType.CHARACTER_WISE) text += "\n"
+    if (data.visualSelection?.typeInEditor?.isLine == true && data.textData.typeInRegister.isChar) text += "\n"
 
-    if (data.textData.typeInRegister == SelectionType.LINE_WISE && text.isNotEmpty() && text.last() != '\n') text += '\n'
+    if (data.textData.typeInRegister.isLine && text.isNotEmpty() && text.last() != '\n') text += '\n'
+
+    if (data.textData.typeInRegister.isChar && text.lastOrNull() == '\n' && data.visualSelection?.typeInEditor?.isLine == false) text =
+      text.dropLast(1)
 
     return ProcessedTextData(text, data.textData.typeInRegister, data.textData.transferableData)
   }
 
-  private fun putTextAndSetCaretPosition(editor: Editor, context: DataContext, text: ProcessedTextData, data: PutData, additionalData: Map<String, Any>) {
+  private fun putTextAndSetCaretPosition(
+    editor: Editor,
+    context: DataContext,
+    text: ProcessedTextData,
+    data: PutData,
+    additionalData: Map<String, Any>,
+  ) {
     val subMode = data.visualSelection?.typeInEditor?.toSubMode() ?: CommandState.SubMode.NONE
     if (ClipboardOptionsData.ideaput in OptionsManager.clipboard) {
       val idePasteProvider = getProviderForPasteViaIde(context, text.typeInRegister, data)
@@ -161,28 +182,51 @@ class PutGroup {
     }
   }
 
-  private fun putForCaret(editor: Editor, caret: Caret, data: PutData, additionalData: Map<String, Any>, context: DataContext, text: ProcessedTextData) {
-    if (data.visualSelection?.typeInEditor == SelectionType.LINE_WISE && editor.isOneLineMode) return
+  private fun putForCaret(
+    editor: Editor,
+    caret: Caret,
+    data: PutData,
+    additionalData: Map<String, Any>,
+    context: DataContext,
+    text: ProcessedTextData,
+  ) {
+    if (data.visualSelection?.typeInEditor?.isLine == true && editor.isOneLineMode) return
     val startOffsets = prepareDocumentAndGetStartOffsets(editor, caret, text.typeInRegister, data, additionalData)
 
     startOffsets.forEach { startOffset ->
       val subMode = data.visualSelection?.typeInEditor?.toSubMode() ?: CommandState.SubMode.NONE
-      val endOffset = putTextInternal(editor, caret, context, text.text, text.typeInRegister, subMode,
-        startOffset, data.count, data.indent, data.caretAfterInsertedText)
+      val endOffset = putTextInternal(
+        editor, caret, context, text.text, text.typeInRegister, subMode,
+        startOffset, data.count, data.indent, data.caretAfterInsertedText
+      )
       VimPlugin.getMark().setChangeMarks(editor, TextRange(startOffset, endOffset))
-      moveCaretToEndPosition(editor, caret, startOffset, endOffset, text.typeInRegister, subMode, data.caretAfterInsertedText)
+      moveCaretToEndPosition(
+        editor,
+        caret,
+        startOffset,
+        endOffset,
+        text.typeInRegister,
+        subMode,
+        data.caretAfterInsertedText
+      )
     }
   }
 
-  private fun prepareDocumentAndGetStartOffsets(editor: Editor, caret: Caret, typeInRegister: SelectionType, data: PutData, additionalData: Map<String, Any>): List<Int> {
+  private fun prepareDocumentAndGetStartOffsets(
+    editor: Editor,
+    caret: Caret,
+    typeInRegister: SelectionType,
+    data: PutData,
+    additionalData: Map<String, Any>,
+  ): List<Int> {
     val application = ApplicationManager.getApplication()
     if (data.visualSelection != null) {
       return when {
-        data.visualSelection.typeInEditor == SelectionType.CHARACTER_WISE && typeInRegister == SelectionType.LINE_WISE -> {
+        data.visualSelection.typeInEditor.isChar && typeInRegister.isLine -> {
           application.runWriteAction { editor.document.insertString(caret.offset, "\n") }
           listOf(caret.offset + 1)
         }
-        data.visualSelection.typeInEditor == SelectionType.BLOCK_WISE -> {
+        data.visualSelection.typeInEditor.isBlock -> {
           val firstSelectedLine = additionalData["firstSelectedLine"] as Int
           val selectedLines = additionalData["selectedLines"] as Int
           val startColumnOfSelection = additionalData["startColumnOfSelection"] as Int
@@ -198,8 +242,21 @@ class PutGroup {
             }
             SelectionType.CHARACTER_WISE -> (firstSelectedLine + selectedLines downTo firstSelectedLine)
               .map { editor.logicalPositionToOffset(LogicalPosition(it, startColumnOfSelection)) }
-            SelectionType.BLOCK_WISE -> listOf(editor.logicalPositionToOffset(LogicalPosition(firstSelectedLine, startColumnOfSelection)))
+            SelectionType.BLOCK_WISE -> listOf(
+              editor.logicalPositionToOffset(
+                LogicalPosition(
+                  firstSelectedLine,
+                  startColumnOfSelection
+                )
+              )
+            )
           }
+        }
+        data.visualSelection.typeInEditor.isLine -> {
+          if (caret.offset == editor.fileSize && editor.fileSize != 0) {
+            application.runWriteAction { editor.document.insertString(caret.offset, "\n") }
+            listOf(caret.offset + 1)
+          } else listOf(caret.offset)
         }
         else -> listOf(caret.offset)
       }
@@ -215,7 +272,8 @@ class PutGroup {
       val line = if (data.putToLine < 0) caret.logicalPosition.line else data.putToLine
       when (typeInRegister) {
         SelectionType.LINE_WISE -> {
-          startOffset = min(editor.document.textLength, VimPlugin.getMotion().moveCaretToLineEnd(editor, line, true) + 1)
+          startOffset =
+            min(editor.document.textLength, VimPlugin.getMotion().moveCaretToLineEnd(editor, line, true) + 1)
           if (startOffset > 0 && startOffset == editor.document.textLength && editor.document.charsSequence[startOffset - 1] != '\n') {
             application.runWriteAction { editor.document.insertString(startOffset, "\n") }
             startOffset++
@@ -233,21 +291,34 @@ class PutGroup {
     }
   }
 
-  private fun getProviderForPasteViaIde(context: DataContext, typeInRegister: SelectionType, data: PutData): PasteProvider? {
-    if (data.visualSelection != null && data.visualSelection.typeInEditor == SelectionType.BLOCK_WISE) return null
-    if ((typeInRegister == SelectionType.LINE_WISE || typeInRegister == SelectionType.CHARACTER_WISE) && data.count == 1) {
+  private fun getProviderForPasteViaIde(
+    context: DataContext,
+    typeInRegister: SelectionType,
+    data: PutData,
+  ): PasteProvider? {
+    if (data.visualSelection != null && data.visualSelection.typeInEditor.isBlock) return null
+    if ((typeInRegister.isLine || typeInRegister.isChar) && data.count == 1) {
       val provider = PlatformDataKeys.PASTE_PROVIDER.getData(context)
       if (provider != null && provider.isPasteEnabled(context)) return provider
     }
     return null
   }
 
-  private fun putTextViaIde(pasteProvider: PasteProvider, editor: Editor, context: DataContext, text: ProcessedTextData, subMode: CommandState.SubMode, data: PutData, additionalData: Map<String, Any>) {
+  private fun putTextViaIde(
+    pasteProvider: PasteProvider,
+    editor: Editor,
+    context: DataContext,
+    text: ProcessedTextData,
+    subMode: CommandState.SubMode,
+    data: PutData,
+    additionalData: Map<String, Any>,
+  ) {
     val carets: MutableMap<Caret, RangeMarker> = mutableMapOf()
     EditorHelper.getOrderedCaretsList(editor).forEach { caret ->
-      val startOffset = prepareDocumentAndGetStartOffsets(editor, caret, text.typeInRegister, data, additionalData).first()
+      val startOffset =
+        prepareDocumentAndGetStartOffsets(editor, caret, text.typeInRegister, data, additionalData).first()
       val pointMarker = editor.document.createRangeMarker(startOffset, startOffset)
-      caret.moveToOffset(startOffset)
+      caret.moveToInlayAwareOffset(startOffset)
       carets[caret] = pointMarker
     }
 
@@ -267,10 +338,24 @@ class PutGroup {
       val startOffset = point.startOffset
       point.dispose()
       if (!caret.isValid) return@forEach
-      val endOffset = if (data.indent) doIndent(editor, caret, context, startOffset, startOffset + text.text.length) else startOffset + text.text.length
+      val endOffset = if (data.indent) doIndent(
+        editor,
+        caret,
+        context,
+        startOffset,
+        startOffset + text.text.length
+      ) else startOffset + text.text.length
       VimPlugin.getMark().setChangeMarks(editor, TextRange(startOffset, endOffset))
       VimPlugin.getMark().setMark(editor, MarkGroup.MARK_CHANGE_POS, startOffset)
-      moveCaretToEndPosition(editor, caret, startOffset, endOffset, text.typeInRegister, subMode, data.caretAfterInsertedText)
+      moveCaretToEndPosition(
+        editor,
+        caret,
+        startOffset,
+        endOffset,
+        text.typeInRegister,
+        subMode,
+        data.caretAfterInsertedText
+      )
     }
   }
 
@@ -281,51 +366,103 @@ class PutGroup {
       // Manually add CaretStateTransferableData to avoid adjustment of copied text to multicaret
       mutableTransferableData += CaretStateTransferableData(intArrayOf(0), intArrayOf(s.length))
     }
-    if (logger.isDebugEnabled) {
-      val transferableClasses = transferableData.joinToString { it.javaClass.name }
-      logger.debug("Paste text with transferable data: $transferableClasses")
-    }
+    logger.debug { "Paste text with transferable data: ${transferableData.joinToString { it.javaClass.name }}" }
     val content = TextBlockTransferable(s, mutableTransferableData, RawText(text))
     CopyPasteManager.getInstance().setContents(content)
     return content
   }
 
-  private fun putTextInternal(editor: Editor, caret: Caret, context: DataContext,
-                              text: String, type: SelectionType, mode: CommandState.SubMode,
-                              startOffset: Int, count: Int, indent: Boolean, cursorAfter: Boolean): Int =
+  private fun putTextInternal(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    text: String,
+    type: SelectionType,
+    mode: CommandState.SubMode,
+    startOffset: Int,
+    count: Int,
+    indent: Boolean,
+    cursorAfter: Boolean,
+  ): Int =
     when (type) {
-      SelectionType.CHARACTER_WISE -> putTextCharacterwise(editor, caret, context, text, type, mode, startOffset, count, indent, cursorAfter)
-      SelectionType.LINE_WISE -> putTextLinewise(editor, caret, context, text, type, mode, startOffset, count, indent, cursorAfter)
+      SelectionType.CHARACTER_WISE -> putTextCharacterwise(
+        editor,
+        caret,
+        context,
+        text,
+        type,
+        mode,
+        startOffset,
+        count,
+        indent,
+        cursorAfter
+      )
+      SelectionType.LINE_WISE -> putTextLinewise(
+        editor,
+        caret,
+        context,
+        text,
+        type,
+        mode,
+        startOffset,
+        count,
+        indent,
+        cursorAfter
+      )
       else -> putTextBlockwise(editor, caret, context, text, type, mode, startOffset, count, indent, cursorAfter)
     }
 
-  private fun putTextLinewise(editor: Editor, caret: Caret, context: DataContext,
-                              text: String, type: SelectionType, mode: CommandState.SubMode,
-                              startOffset: Int, count: Int, indent: Boolean, cursorAfter: Boolean): Int {
+  private fun putTextLinewise(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    text: String,
+    type: SelectionType,
+    mode: CommandState.SubMode,
+    startOffset: Int,
+    count: Int,
+    indent: Boolean,
+    cursorAfter: Boolean,
+  ): Int {
     val caretModel = editor.caretModel
     val overlappedCarets = ArrayList<Caret>(caretModel.caretCount)
     for (possiblyOverlappedCaret in caretModel.allCarets) {
       if (possiblyOverlappedCaret.offset != startOffset || possiblyOverlappedCaret === caret) continue
 
-      MotionGroup.moveCaret(editor, possiblyOverlappedCaret,
-        VimPlugin.getMotion().moveCaretHorizontal(editor, possiblyOverlappedCaret, 1, true))
+      MotionGroup.moveCaret(
+        editor, possiblyOverlappedCaret,
+        VimPlugin.getMotion().getOffsetOfHorizontalMotion(editor, possiblyOverlappedCaret, 1, true)
+      )
       overlappedCarets.add(possiblyOverlappedCaret)
     }
 
-    val endOffset = putTextCharacterwise(editor, caret, context, text, type, mode, startOffset, count, indent,
-      cursorAfter)
+    val endOffset = putTextCharacterwise(
+      editor, caret, context, text, type, mode, startOffset, count, indent,
+      cursorAfter
+    )
 
     for (overlappedCaret in overlappedCarets) {
-      MotionGroup.moveCaret(editor, overlappedCaret,
-        VimPlugin.getMotion().moveCaretHorizontal(editor, overlappedCaret, -1, true))
+      MotionGroup.moveCaret(
+        editor, overlappedCaret,
+        VimPlugin.getMotion().getOffsetOfHorizontalMotion(editor, overlappedCaret, -1, true)
+      )
     }
 
     return endOffset
   }
 
-  private fun putTextBlockwise(editor: Editor, caret: Caret, context: DataContext,
-                               text: String, type: SelectionType, mode: CommandState.SubMode,
-                               startOffset: Int, count: Int, indent: Boolean, cursorAfter: Boolean): Int {
+  private fun putTextBlockwise(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    text: String,
+    type: SelectionType,
+    mode: CommandState.SubMode,
+    startOffset: Int,
+    count: Int,
+    indent: Boolean,
+    cursorAfter: Boolean,
+  ): Int {
     val startPosition = editor.offsetToLogicalPosition(startOffset)
     val currentColumn = if (mode == CommandState.SubMode.VISUAL_LINE) 0 else startPosition.column
     var currentLine = startPosition.line
@@ -334,7 +471,7 @@ class PutGroup {
     if (currentLine + lineCount >= EditorHelper.getLineCount(editor)) {
       val limit = currentLine + lineCount - EditorHelper.getLineCount(editor)
       for (i in 0 until limit) {
-        MotionGroup.moveCaret(editor, caret, EditorHelper.getFileSize(editor, true))
+        MotionGroup.moveCaret(editor, caret, editor.fileSize)
         VimPlugin.getChange().insertText(editor, caret, "\n")
       }
     }
@@ -383,10 +520,18 @@ class PutGroup {
     return endOffset
   }
 
-  private fun putTextCharacterwise(editor: Editor, caret: Caret, context: DataContext,
-                                   text: String, type: SelectionType,
-                                   mode: CommandState.SubMode, startOffset: Int, count: Int, indent: Boolean,
-                                   cursorAfter: Boolean): Int {
+  private fun putTextCharacterwise(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    text: String,
+    type: SelectionType,
+    mode: CommandState.SubMode,
+    startOffset: Int,
+    count: Int,
+    indent: Boolean,
+    cursorAfter: Boolean,
+  ): Int {
     MotionGroup.moveCaret(editor, caret, startOffset)
     val insertedText = text.repeat(count)
     VimPlugin.getChange().insertText(editor, caret, insertedText)
@@ -407,7 +552,7 @@ class PutGroup {
     endOffset: Int,
     typeInRegister: SelectionType,
     modeInEditor: CommandState.SubMode,
-    caretAfterInsertedText: Boolean
+    caretAfterInsertedText: Boolean,
   ) {
     val cursorMode = when (typeInRegister) {
       SelectionType.BLOCK_WISE -> when (modeInEditor) {
@@ -457,9 +602,10 @@ class PutGroup {
   }
 
   private fun notifyAboutIdeaPut(project: Project?) {
-    if (VimPlugin.getVimState().isIdeaPutNotified
-      || ClipboardOptionsData.ideaput in OptionsManager.clipboard
-      || ClipboardOptionsData.ideaputDisabled) return
+    if (VimPlugin.getVimState().isIdeaPutNotified ||
+      ClipboardOptionsData.ideaput in OptionsManager.clipboard ||
+      ClipboardOptionsData.ideaputDisabled
+    ) return
 
     VimPlugin.getVimState().isIdeaPutNotified = true
 

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@ package org.jetbrains.plugins.ideavim.action.change.change.number
 
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 /**
@@ -27,31 +29,38 @@ import org.jetbrains.plugins.ideavim.VimTestCase
  */
 class ChangeVisualNumberIncActionTest : VimTestCase() {
   fun `test inc visual full number`() {
-    doTest(parseKeys("V<C-A>"),
+    doTest(
+      "V<C-A>",
       "${c}12345",
       "${c}12346",
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
   }
 
   fun `test inc visual multiple numbers`() {
-    doTest(parseKeys("v10w<C-A>"),
+    doTest(
+      "v10w<C-A>",
       "11 <- should not be incremented |${c}11| should not be incremented -> 12",
       "11 <- should not be incremented |${c}12| should not be incremented -> 12",
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
   }
 
   fun `test inc visual part of number`() {
-    doTest(parseKeys("v4l<C-A>"),
+    doTest(
+      "v4l<C-A>",
       "11111${c}22222111111",
       "11111${c}22223111111",
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
   }
 
   fun `test inc visual multiple lines`() {
-    doTest(parseKeys("V2j<C-A>"),
+    doTest(
+      "V2j<C-A>",
       """
                     no inc 1
                     no inc 1
@@ -61,7 +70,7 @@ class ChangeVisualNumberIncActionTest : VimTestCase() {
                     no inc 1
                     no inc 1
 
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                     no inc 1
                     no inc 1
@@ -71,52 +80,136 @@ class ChangeVisualNumberIncActionTest : VimTestCase() {
                     no inc 1
                     no inc 1
 
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
       CommandState.SubMode.NONE
     )
   }
 
   fun `test inc visual 999 multiple lines`() {
-    doTest(parseKeys("V2j<C-A>"),
+    doTest(
+      "V2j<C-A>",
       """
                     ${c}999
                     999
                     999
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                     ${c}1000
                     1000
                     1000
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
   }
 
   fun `test inc visual multiple numbers on line`() {
-    doTest(parseKeys("V<C-A>"),
+    doTest(
+      "V<C-A>",
       "1 should$c not be incremented -> 2",
       "${c}2 should not be incremented -> 2",
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.MULTICARET)
   fun `test change number inc visual multiple cursor`() {
-    typeTextInFile(parseKeys("Vj<C-A>"),
+    typeTextInFile(
+      parseKeys("Vj<C-A>"),
       """
                     ${c}1
                     2
                     3
                     ${c}4
                     5
-                    """.trimIndent())
-    myFixture.checkResult(
+      """.trimIndent()
+    )
+    assertState(
       """
                     ${c}2
                     3
                     3
                     ${c}5
                     6
-                    """.trimIndent())
+      """.trimIndent()
+    )
+  }
+
+  fun `test two numbers on the same line`() {
+    doTest(
+      "v$<C-A>",
+      "1 <- should$c not be incremented 2",
+      "1 <- should$c not be incremented 3",
+      CommandState.Mode.COMMAND,
+      CommandState.SubMode.NONE
+    )
+  }
+
+  fun `test two numbers on the same line with two lines`() {
+    doTest(
+      "vj<C-A>",
+      """1 <- should$c not be incremented 2
+        |1 should not be incremented -> 2
+      """.trimMargin(),
+      """1 <- should$c not be incremented 3
+        |2 should not be incremented -> 2
+      """.trimMargin(),
+      CommandState.Mode.COMMAND,
+      CommandState.SubMode.NONE
+    )
+  }
+
+  fun `test two numbers on the same line with three lines`() {
+    doTest(
+      "vjj<C-A>",
+      """1 <- should$c not be incremented 2
+        |1 should not be incremented -> 2
+        |1 should not be incremented -> 2
+      """.trimMargin(),
+      """1 <- should$c not be incremented 3
+        |2 should not be incremented -> 2
+        |2 should not be incremented -> 2
+      """.trimMargin(),
+      CommandState.Mode.COMMAND,
+      CommandState.SubMode.NONE
+    )
+  }
+
+  fun `test block nothing increment`() {
+    doTest(
+      "<C-V>jjll<C-A>",
+      """
+        |1 <- should$c not be incremented -> 2
+        |1 <- should not be incremented -> 2
+        |1 <- should not be incremented -> 2
+      """.trimMargin(),
+      """
+        |1 <- should$c not be incremented -> 2
+        |1 <- should not be incremented -> 2
+        |1 <- should not be incremented -> 2
+      """.trimMargin(),
+      CommandState.Mode.COMMAND,
+      CommandState.SubMode.NONE
+    )
+  }
+
+  fun `test block increment end`() {
+    doTest(
+      "<C-V>jj$<C-A>",
+      """
+        |1 <- should$c not be incremented 2
+        |1 <- should not be incremented 2
+        |1 <- should not be incremented 2
+      """.trimMargin(),
+      """
+        |1 <- should$c not be incremented 3
+        |1 <- should not be incremented 3
+        |1 <- should not be incremented 3
+      """.trimMargin(),
+      CommandState.Mode.COMMAND,
+      CommandState.SubMode.NONE
+    )
   }
 }

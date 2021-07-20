@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,18 +19,27 @@
 package com.maddyhome.idea.vim.extension;
 
 import com.intellij.openapi.extensions.ExtensionPointName;
+import com.maddyhome.idea.vim.VimPlugin;
+import com.maddyhome.idea.vim.helper.VimNlsSafe;
+import com.maddyhome.idea.vim.key.MappingOwner;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * @author vlan
  */
 public interface VimExtension {
-  @NotNull ExtensionPointName<VimExtension> EP_NAME = ExtensionPointName.create("IdeaVIM.vimExtension");
+  @NotNull ExtensionPointName<ExtensionBeanClass> EP_NAME = ExtensionPointName.create("IdeaVIM.vimExtension");
 
-  @NotNull
-  String getName();
+  @VimNlsSafe
+  @NotNull String getName();
+
+  default MappingOwner getOwner() {
+    return MappingOwner.Plugin.Companion.get(getName());
+  }
 
   void init();
 
-  void dispose();
+  default void dispose() {
+    VimPlugin.getKey().removeKeyMapping(getOwner());
+  }
 }

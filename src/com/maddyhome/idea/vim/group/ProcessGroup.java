@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,33 +18,40 @@
 
 package com.maddyhome.idea.vim.group;
 
+import com.intellij.execution.ExecutionException;
+import com.intellij.execution.configurations.GeneralCommandLine;
+import com.intellij.execution.process.CapturingProcessHandler;
+import com.intellij.execution.process.ProcessAdapter;
+import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessOutput;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressIndicatorProvider;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.util.execution.ParametersListUtil;
 import com.intellij.util.text.CharSequenceReader;
 import com.maddyhome.idea.vim.KeyHandler;
 import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.command.Command;
-import com.maddyhome.idea.vim.command.CommandFlags;
 import com.maddyhome.idea.vim.command.CommandState;
-import com.maddyhome.idea.vim.command.MappingMode;
-import com.maddyhome.idea.vim.common.TextRange;
 import com.maddyhome.idea.vim.ex.CommandParser;
 import com.maddyhome.idea.vim.ex.ExException;
+import com.maddyhome.idea.vim.ex.InvalidCommandException;
 import com.maddyhome.idea.vim.helper.UiHelper;
-import com.maddyhome.idea.vim.ui.ExEntryPanel;
+import com.maddyhome.idea.vim.option.OptionsManager;
+import com.maddyhome.idea.vim.ui.ex.ExEntryPanel;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.io.*;
-import java.util.EnumSet;
+import java.util.ArrayList;
 
 
 public class ProcessGroup {
-  public ProcessGroup() {
-  }
-
   public String getLastCommand() {
     return lastCommand;
   }
@@ -56,17 +63,16 @@ public class ProcessGroup {
     }
 
     String initText = "";
-    String label = "" + leader;
+    String label = String.valueOf(leader);
 
     ExEntryPanel panel = ExEntryPanel.getInstance();
     panel.activate(editor, context, label, initText, count);
   }
 
-  public String endSearchCommand(@NotNull final Editor editor) {
+  public @NotNull String endSearchCommand(final @NotNull Editor editor) {
     ExEntryPanel panel = ExEntryPanel.getInstance();
     panel.deactivate(true);
 
-    record(editor, panel.getText());
     return panel.getText();
   }
 
@@ -75,7 +81,7 @@ public class ProcessGroup {
     if (editor.isOneLineMode()) return;
 
     String initText = getRange(editor, cmd);
-    CommandState.getInstance(editor).pushState(CommandState.Mode.EX_ENTRY, CommandState.SubMode.NONE, MappingMode.CMD_LINE);
+    CommandState.getInstance(editor).pushModes(CommandState.Mode.CMD_LINE, CommandState.SubMode.NONE);
     ExEntryPanel panel = ExEntryPanel.getInstance();
     panel.activate(editor, context, ":", initText, 1);
   }
@@ -92,34 +98,33 @@ public class ProcessGroup {
       return true;
     }
     else {
-      CommandState.getInstance(editor).popState();
+      CommandState.getInstance(editor).popModes();
       KeyHandler.getInstance().reset(editor);
       return false;
     }
   }
 
-  public boolean processExEntry(@NotNull final Editor editor, @NotNull final DataContext context) {
+  public boolean processExEntry(final @NotNull Editor editor, final @NotNull DataContext context) {
     ExEntryPanel panel = ExEntryPanel.getInstance();
     panel.deactivate(true);
     boolean res = true;
     try {
-      CommandState.getInstance(editor).popState();
+      CommandState.getInstance(editor).popModes();
+
       logger.debug("processing command");
+
       final String text = panel.getText();
-      record(editor, text);
+
+      if (!panel.getLabel().equals(":")) {
+        // Search is handled via Argument.Type.EX_STRING. Although ProcessExEntryAction is registered as the handler for
+        // <CR> in both command and search modes, it's only invoked for command mode (see KeyHandler.handleCommandNode).
+        // We should never be invoked for anything other than an actual ex command.
+        throw new InvalidCommandException("Expected ':' command. Got '" + panel.getLabel() + "'", text);
+      }
+
       if (logger.isDebugEnabled()) logger.debug("swing=" + SwingUtilities.isEventDispatchThread());
-      if (panel.getLabel().equals(":")) {
-        CommandParser.getInstance().processCommand(editor, context, text, 1);
-      }
-      else {
-        int pos = VimPlugin.getSearch().search(editor, text, panel.getCount(),
-                                                                 panel.getLabel().equals("/")
-                                                                 ? EnumSet.of(CommandFlags.FLAG_SEARCH_FWD)
-                                                                 : EnumSet.of(CommandFlags.FLAG_SEARCH_REV), true);
-        if (pos == -1) {
-          res = false;
-        }
-      }
+
+      CommandParser.INSTANCE.processCommand(editor, context, text, 1, false);
     }
     catch (ExException e) {
       VimPlugin.showMessage(e.getMessage());
@@ -135,28 +140,21 @@ public class ProcessGroup {
     return res;
   }
 
-  public void cancelExEntry(@NotNull final Editor editor, boolean scrollToOldPosition) {
-    CommandState.getInstance(editor).popState();
+  public void cancelExEntry(final @NotNull Editor editor, boolean resetCaret) {
+    CommandState.getInstance(editor).popModes();
     KeyHandler.getInstance().reset(editor);
     ExEntryPanel panel = ExEntryPanel.getInstance();
-    panel.deactivate(true, scrollToOldPosition);
-  }
-
-  private void record(Editor editor, @NotNull String text) {
-    if (CommandState.getInstance(editor).isRecording()) {
-      VimPlugin.getRegister().recordText(text);
-    }
+    panel.deactivate(true, resetCaret);
   }
 
   public void startFilterCommand(@NotNull Editor editor, DataContext context, @NotNull Command cmd) {
     String initText = getRange(editor, cmd) + "!";
-    CommandState.getInstance(editor).pushState(CommandState.Mode.EX_ENTRY, CommandState.SubMode.NONE, MappingMode.CMD_LINE);
+    CommandState.getInstance(editor).pushModes(CommandState.Mode.CMD_LINE, CommandState.SubMode.NONE);
     ExEntryPanel panel = ExEntryPanel.getInstance();
     panel.activate(editor, context, ":", initText, 1);
   }
 
-  @NotNull
-  private String getRange(Editor editor, @NotNull Command cmd) {
+  private @NotNull String getRange(Editor editor, @NotNull Command cmd) {
     String initText = "";
     if (CommandState.getInstance(editor).getMode() == CommandState.Mode.VISUAL) {
       initText = "'<,'>";
@@ -173,39 +171,93 @@ public class ProcessGroup {
     return initText;
   }
 
-  public boolean executeFilter(@NotNull Editor editor, @NotNull TextRange range,
-                               @NotNull String command) throws IOException {
-    final CharSequence charsSequence = editor.getDocument().getCharsSequence();
-    final int startOffset = range.getStartOffset();
-    final int endOffset = range.getEndOffset();
-    final String output = executeCommand(command, charsSequence.subSequence(startOffset, endOffset));
-    editor.getDocument().replaceString(startOffset, endOffset, output);
-    return true;
+  public @Nullable String executeCommand(@NotNull Editor editor, @NotNull String command, @Nullable CharSequence input)
+    throws ExecutionException, ProcessCanceledException {
+
+    // This is a much simplified version of how Vim does this. We're using stdin/stdout directly, while Vim will
+    // redirect to temp files ('shellredir' and 'shelltemp') or use pipes. We don't support 'shellquote', because we're
+    // not handling redirection, but we do use 'shellxquote' and 'shellxescape', because these have defaults that work
+    // better with Windows. We also don't bother using ShellExecute for Windows commands beginning with `start`.
+    // Finally, we're also not bothering with the crazy space and backslash handling of the 'shell' options content.
+    return ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
+      final String shell = OptionsManager.INSTANCE.getShell().getValue();
+      final String shellcmdflag = OptionsManager.INSTANCE.getShellcmdflag().getValue();
+      final String shellxescape = OptionsManager.INSTANCE.getShellxescape().getValue();
+      final String shellxquote = OptionsManager.INSTANCE.getShellxquote().getValue();
+
+      // For Win32. See :help 'shellxescape'
+      final String escapedCommand = shellxquote.equals("(")
+                                    ? doEscape(command, shellxescape, "^")
+                                    : command;
+      // Required for Win32+cmd.exe, defaults to "(". See :help 'shellxquote'
+      final String quotedCommand = shellxquote.equals("(")
+                                   ? "(" + escapedCommand + ")"
+                                   : (shellxquote.equals("\"(")
+                                      ? "\"(" + escapedCommand + ")\""
+                                      : shellxquote + escapedCommand + shellxquote);
+
+      final ArrayList<String> commands = new ArrayList<>();
+      commands.add(shell);
+      if (!shellcmdflag.isEmpty()) {
+        // Note that Vim also does a simple whitespace split for multiple parameters
+        commands.addAll(ParametersListUtil.parse(shellcmdflag));
+      }
+      commands.add(quotedCommand);
+
+      if (logger.isDebugEnabled()) {
+        logger.debug(String.format("shell=%s shellcmdflag=%s command=%s", shell, shellcmdflag, quotedCommand));
+      }
+
+      final GeneralCommandLine commandLine = new GeneralCommandLine(commands);
+      final CapturingProcessHandler handler = new CapturingProcessHandler(commandLine);
+      if (input != null) {
+        handler.addProcessListener(new ProcessAdapter() {
+          @Override
+          public void startNotified(@NotNull ProcessEvent event) {
+            try {
+              final CharSequenceReader charSequenceReader = new CharSequenceReader(input);
+              final BufferedWriter outputStreamWriter = new BufferedWriter(new OutputStreamWriter(handler.getProcessInput()));
+              copy(charSequenceReader, outputStreamWriter);
+              outputStreamWriter.close();
+            }
+            catch (IOException e) {
+              logger.error(e);
+            }
+          }
+        });
+      }
+
+      final ProgressIndicator progressIndicator = ProgressIndicatorProvider.getInstance().getProgressIndicator();
+      final ProcessOutput output = handler.runProcessWithProgressIndicator(progressIndicator);
+
+      lastCommand = command;
+
+      if (output.isCancelled()) {
+        // TODO: Vim will use whatever text has already been written to stdout
+        // For whatever reason, we're not getting any here, so just throw an exception
+        throw new ProcessCanceledException();
+      }
+
+      final Integer exitCode = handler.getExitCode();
+      if (exitCode != null && exitCode != 0) {
+        VimPlugin.showMessage("shell returned " + exitCode);
+        VimPlugin.indicateError();
+        return output.getStderr() + output.getStdout();
+      }
+
+      return output.getStdout();
+    }, "IdeaVim - !" + command, true, editor.getProject());
   }
 
-  @NotNull
-  public String executeCommand(@NotNull String command, @Nullable CharSequence input) throws IOException {
-    if (logger.isDebugEnabled()) {
-      logger.debug("command=" + command);
+  private String doEscape(String original, String charsToEscape, String escapeChar) {
+    String result = original;
+    for (char c : charsToEscape.toCharArray()) {
+      result = result.replace("" + c, escapeChar + c);
     }
-
-    final Process process = Runtime.getRuntime().exec(command);
-
-    if (input != null) {
-      final BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()));
-      copy(new CharSequenceReader(input), outputWriter);
-      outputWriter.close();
-    }
-
-    final BufferedReader inputReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-    final StringWriter writer = new StringWriter();
-    copy(inputReader, writer);
-    writer.close();
-
-    lastCommand = command;
-    return writer.toString();
+    return result;
   }
 
+  // TODO: Java 10 has a transferTo method we could use instead
   private void copy(@NotNull Reader from, @NotNull Writer to) throws IOException {
     char[] buf = new char[2048];
     int cnt;

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,15 +23,14 @@ import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.ex.CommandHandler
 import com.maddyhome.idea.vim.ex.ExCommand
-import com.maddyhome.idea.vim.ex.commands
 import com.maddyhome.idea.vim.ex.flags
+import com.maddyhome.idea.vim.helper.MessageHelper
 
 class DelCmdHandler : CommandHandler.SingleExecution() {
-  override val names = commands("delc[ommand]")
   override val argFlags = flags(RangeFlag.RANGE_FORBIDDEN, ArgumentFlag.ARGUMENT_REQUIRED, Access.READ_ONLY)
   override fun execute(editor: Editor, context: DataContext, cmd: ExCommand): Boolean {
     if (!VimPlugin.getCommand().hasAlias(cmd.argument)) {
-      VimPlugin.showMessage("E184: No such user-defined command: ${cmd.argument}")
+      VimPlugin.showMessage(MessageHelper.message("e184.no.such.user.defined.command.0", cmd.argument))
       return false
     }
 

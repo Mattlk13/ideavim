@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 package com.maddyhome.idea.vim.handler
 
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.CaretEvent
@@ -27,8 +28,13 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandFlags
+import com.maddyhome.idea.vim.command.MotionType
 import com.maddyhome.idea.vim.group.MotionGroup
-import com.maddyhome.idea.vim.helper.*
+import com.maddyhome.idea.vim.helper.EditorHelper
+import com.maddyhome.idea.vim.helper.inBlockSubMode
+import com.maddyhome.idea.vim.helper.inVisualMode
+import com.maddyhome.idea.vim.helper.isEndAllowed
+import com.maddyhome.idea.vim.helper.vimSelectionStart
 
 /**
  * @author Alex Plate
@@ -36,7 +42,7 @@ import com.maddyhome.idea.vim.helper.*
  * Base class for motion handlers.
  * @see [MotionActionHandler.SingleExecution] and [MotionActionHandler.ForEachCaret]
  */
-sealed class MotionActionHandler : EditorActionHandlerBase.SingleExecution() {
+sealed class MotionActionHandler : EditorActionHandlerBase(false) {
 
   /**
    * Base class for motion handlers.
@@ -52,7 +58,14 @@ sealed class MotionActionHandler : EditorActionHandlerBase.SingleExecution() {
      *   called 5 times.
      * The method executes only once it there is block selection.
      */
-    abstract fun getOffset(editor: Editor, caret: Caret, context: DataContext, count: Int, rawCount: Int, argument: Argument?): Int
+    abstract fun getOffset(
+      editor: Editor,
+      caret: Caret,
+      context: DataContext,
+      count: Int,
+      rawCount: Int,
+      argument: Argument?,
+    ): Motion
 
     /**
      * This method is called before [getOffset] once for each [caret].
@@ -87,7 +100,7 @@ sealed class MotionActionHandler : EditorActionHandlerBase.SingleExecution() {
      * It executes once for all carets. That means that if you have 5 carets, [getOffset] will be
      *   called 1 time.
      */
-    abstract fun getOffset(editor: Editor, context: DataContext, count: Int, rawCount: Int, argument: Argument?): Int
+    abstract fun getOffset(editor: Editor, context: DataContext, count: Int, rawCount: Int, argument: Argument?): Motion
 
     /**
      * This method is called before [getOffset].
@@ -110,25 +123,51 @@ sealed class MotionActionHandler : EditorActionHandlerBase.SingleExecution() {
     open fun postMove(editor: Editor, context: DataContext, cmd: Command) = Unit
   }
 
-  final override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
+  abstract val motionType: MotionType
+
+  final override val type: Command.Type = Command.Type.MOTION
+
+  fun getHandlerOffset(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): Motion {
+    return when (this) {
+      is SingleExecution -> getOffset(editor, context, count, rawCount, argument)
+      is ForEachCaret -> getOffset(editor, caret, context, count, rawCount, argument)
+    }
+  }
+
+  final override fun baseExecute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean {
     val blockSubmodeActive = editor.inBlockSubMode
 
     when (this) {
       is SingleExecution -> run {
         if (!preOffsetComputation(editor, context, cmd)) return@run
 
-        var offset = getOffset(editor, context, cmd.count, cmd.rawCount, cmd.argument)
+        val offset = getOffset(editor, context, cmd.count, cmd.rawCount, cmd.argument)
 
-        if (offset >= 0) {
-          if (CommandFlags.FLAG_SAVE_JUMP in cmd.flags) {
-            VimPlugin.getMark().saveJumpLocation(editor)
+        when (offset) {
+          is Motion.AbsoluteOffset -> {
+            var resultOffset = offset.offset
+            if (resultOffset < 0) {
+              logger<MotionActionHandler>().error("Offset is less than 0. $resultOffset. ${this.javaClass.name}")
+            }
+            if (CommandFlags.FLAG_SAVE_JUMP in cmd.flags) {
+              VimPlugin.getMark().saveJumpLocation(editor)
+            }
+            if (!editor.isEndAllowed) {
+              resultOffset = EditorHelper.normalizeOffset(editor, resultOffset, false)
+            }
+            preMove(editor, context, cmd)
+            MotionGroup.moveCaret(editor, editor.caretModel.primaryCaret, resultOffset)
+            postMove(editor, context, cmd)
           }
-          if (!editor.mode.isEndAllowed) {
-            offset = EditorHelper.normalizeOffset(editor, offset, false)
-          }
-          preMove(editor, context, cmd)
-          MotionGroup.moveCaret(editor, editor.caretModel.primaryCaret, offset)
-          postMove(editor, context, cmd)
+          is Motion.Error -> VimPlugin.indicateError()
+          is Motion.NoMotion -> Unit
         }
       }
       is ForEachCaret -> run {
@@ -156,19 +195,27 @@ sealed class MotionActionHandler : EditorActionHandlerBase.SingleExecution() {
     this as ForEachCaret
     if (!preOffsetComputation(editor, caret, context, cmd)) return
 
-    var offset = getOffset(editor, caret, context, cmd.count, cmd.rawCount, cmd.argument)
+    val offset = getOffset(editor, caret, context, cmd.count, cmd.rawCount, cmd.argument)
 
-    if (offset >= 0) {
-      if (CommandFlags.FLAG_SAVE_JUMP in cmd.flags) {
-        VimPlugin.getMark().saveJumpLocation(editor)
+    when (offset) {
+      is Motion.AbsoluteOffset -> {
+        var resultMotion = offset.offset
+        if (resultMotion < 0) {
+          logger<MotionActionHandler>().error("Offset is less than 0. $resultMotion. ${this.javaClass.name}")
+        }
+        if (CommandFlags.FLAG_SAVE_JUMP in cmd.flags) {
+          VimPlugin.getMark().saveJumpLocation(editor)
+        }
+        if (!editor.isEndAllowed) {
+          resultMotion = EditorHelper.normalizeOffset(editor, resultMotion, false)
+        }
+        preMove(editor, caret, context, cmd)
+        MotionGroup.moveCaret(editor, caret, resultMotion)
+        val postMoveCaret = if (editor.inBlockSubMode) editor.caretModel.primaryCaret else caret
+        postMove(editor, postMoveCaret, context, cmd)
       }
-      if (!editor.mode.isEndAllowed) {
-        offset = EditorHelper.normalizeOffset(editor, offset, false)
-      }
-      preMove(editor, caret, context, cmd)
-      MotionGroup.moveCaret(editor, caret, offset)
-      val postMoveCaret = if (editor.inBlockSubMode) editor.caretModel.primaryCaret else caret
-      postMove(editor, postMoveCaret, context, cmd)
+      is Motion.Error -> VimPlugin.indicateError()
+      is Motion.NoMotion -> Unit
     }
   }
 
@@ -178,10 +225,11 @@ sealed class MotionActionHandler : EditorActionHandlerBase.SingleExecution() {
       val caretToDelete = event.caret ?: return
       if (editor.inVisualMode) {
         for (caret in editor.caretModel.allCarets) {
-          if (caretToDelete.selectionStart < caret.selectionEnd &&
-            caretToDelete.selectionStart >= caret.selectionStart ||
-            caretToDelete.selectionEnd <= caret.selectionEnd &&
-            caretToDelete.selectionEnd > caret.selectionStart) {
+          val curCaretStart = caret.selectionStart
+          val curCaretEnd = caret.selectionEnd
+          val caretStartBetweenCur = caretToDelete.selectionStart in curCaretStart until curCaretEnd
+          val caretEndBetweenCur = caretToDelete.selectionEnd in curCaretStart + 1..curCaretEnd
+          if (caretStartBetweenCur || caretEndBetweenCur) {
             // Okay, caret is being removed because of merging
             val vimSelectionStart = caretToDelete.vimSelectionStart
             caret.vimSelectionStart = vimSelectionStart
@@ -191,3 +239,17 @@ sealed class MotionActionHandler : EditorActionHandlerBase.SingleExecution() {
     }
   }
 }
+
+sealed class Motion {
+  object Error : Motion()
+  object NoMotion : Motion()
+  class AbsoluteOffset(val offset: Int) : Motion()
+}
+
+fun Int.toMotion(): Motion.AbsoluteOffset {
+  if (this < 0) error("Unexpected motion: $this")
+  return Motion.AbsoluteOffset(this)
+}
+
+fun Int.toMotionOrError(): Motion = if (this < 0) Motion.Error else Motion.AbsoluteOffset(this)
+fun Int.toMotionOrNoMotion(): Motion = if (this < 0) Motion.NoMotion else Motion.AbsoluteOffset(this)

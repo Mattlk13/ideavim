@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,11 +18,13 @@
 
 package com.maddyhome.idea.vim.regexp;
 
+import org.jetbrains.annotations.NonNls;
+
 public final class CharacterClasses {
   private CharacterClasses() {
   }
 
-  public static final String[] CLASS_NAMES = new String[]{
+  public static final String @NonNls [] CLASS_NAMES = new String[]{
     "alnum:]",
     "alpha:]",
     "blank:]",
@@ -147,7 +149,7 @@ public final class CharacterClasses {
   public static boolean isPunct(char ch) {
     return ((ch >= '!' && ch <= '/') ||
             (ch >= ':' && ch <= '@') ||
-            (ch >= '[' && ch <= '\'') ||
+            (ch >= '[' && ch <= '`') ||
             (ch >= '{' && ch <= '~'));
   }
 

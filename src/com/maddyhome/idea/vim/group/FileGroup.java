@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,22 +39,22 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileVisitor;
 import com.maddyhome.idea.vim.KeyHandler;
 import com.maddyhome.idea.vim.VimPlugin;
+import com.maddyhome.idea.vim.VimProjectService;
 import com.maddyhome.idea.vim.command.CommandState;
 import com.maddyhome.idea.vim.common.TextRange;
 import com.maddyhome.idea.vim.helper.EditorHelper;
+import com.maddyhome.idea.vim.helper.EditorHelperRt;
+import com.maddyhome.idea.vim.helper.MessageHelper;
 import com.maddyhome.idea.vim.helper.SearchHelper;
-import com.maddyhome.idea.vim.helper.StringHelper;
+import com.maddyhome.idea.vim.option.IdeaWriteData;
+import com.maddyhome.idea.vim.option.OptionsManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.swing.*;
 import java.io.File;
 import java.util.HashMap;
 
 public class FileGroup {
-  public FileGroup() {
-  }
-
   public boolean openFile(@NotNull String filename, @NotNull DataContext context) {
     if (logger.isDebugEnabled()) {
       logger.debug("openFile(" + filename + ")");
@@ -71,6 +71,8 @@ public class FileGroup {
       // Can't open a file unless it has a known file type. The next call will return the known type.
       // If unknown, IDEA will prompt the user to pick a type.
       FileType type = FileTypeManager.getInstance().getKnownFileTypeOrAssociate(found, project);
+
+      //noinspection IfStatementWithIdenticalBranches
       if (type != null) {
         FileEditorManager fem = FileEditorManager.getInstance(project);
         fem.openFile(found, true);
@@ -84,14 +86,13 @@ public class FileGroup {
       }
     }
     else {
-      VimPlugin.showMessage("Unable to find " + filename);
+      VimPlugin.showMessage(MessageHelper.message("unable.to.find.0", filename));
 
       return false;
     }
   }
 
-  @Nullable
-  VirtualFile findFile(@NotNull String filename, @NotNull Project project) {
+  @Nullable VirtualFile findFile(@NotNull String filename, @NotNull Project project) {
     VirtualFile found = null;
     if (filename.length() > 2 && filename.charAt(0) == '~' && filename.charAt(1) == File.separatorChar) {
       String homefile = filename.substring(2);
@@ -123,8 +124,7 @@ public class FileGroup {
     return found;
   }
 
-  @Nullable
-  private VirtualFile findFile(@NotNull VirtualFile root, @NotNull String filename) {
+  private @Nullable VirtualFile findFile(@NotNull VirtualFile root, @NotNull String filename) {
     VirtualFile res = root.findFileByRelativePath(filename);
     if (res != null) {
       return res;
@@ -161,10 +161,31 @@ public class FileGroup {
   }
 
   /**
+   * Closes editor.
+   */
+  public void closeFile(int number, @NotNull DataContext context) {
+    final Project project = PlatformDataKeys.PROJECT.getData(context);
+    if (project == null) return;
+    final FileEditorManagerEx fileEditorManager = FileEditorManagerEx.getInstanceEx(project);
+    final EditorWindow window = fileEditorManager.getCurrentWindow();
+    VirtualFile[] editors = fileEditorManager.getOpenFiles();
+    if (number >= 0 && number < editors.length) {
+      fileEditorManager.closeFile(editors[number], window);
+    }
+  }
+
+  /**
    * Saves specific file in the project.
    */
   public void saveFile(DataContext context) {
-    KeyHandler.executeAction("SaveDocument", context);
+    String action;
+    if (IdeaWriteData.all.equals(OptionsManager.INSTANCE.getIdeawrite().getValue())) {
+      action = "SaveAll";
+    }
+    else {
+      action = "SaveDocument";
+    }
+    KeyHandler.executeAction(action, context);
   }
 
   /**
@@ -228,13 +249,26 @@ public class FileGroup {
     }
   }
 
-  @Nullable
-  Editor selectEditor(Project project, @NotNull VirtualFile file) {
+  /**
+   * Returns the previous tab.
+   */
+  public @Nullable VirtualFile getPreviousTab(@NotNull DataContext context) {
+    Project project = PlatformDataKeys.PROJECT.getData(context);
+    if (project == null) return null;
+    FileEditorManager fem = FileEditorManager.getInstance(project); // API change - don't merge
+    VirtualFile vf = lastSelections.get(fem);
+    if (vf != null && vf.isValid()) {
+      return vf;
+    }
+    return null;
+  }
+
+  @Nullable Editor selectEditor(Project project, @NotNull VirtualFile file) {
     FileEditorManager fMgr = FileEditorManager.getInstance(project);
     FileEditor[] feditors = fMgr.openFile(file, true);
     if (feditors.length > 0) {
       if (feditors[0] instanceof TextEditor) {
-        Editor editor = ((TextEditor) feditors[0]).getEditor();
+        Editor editor = ((TextEditor)feditors[0]).getEditor();
         if (!editor.isDisposed()) {
           return editor;
         }
@@ -242,22 +276,6 @@ public class FileGroup {
     }
 
     return null;
-  }
-
-  public void displayAsciiInfo(@NotNull Editor editor) {
-    int offset = editor.getCaretModel().getOffset();
-    CharSequence charsSequence = editor.getDocument().getCharsSequence();
-    if (charsSequence.length() == 0 || offset >= charsSequence.length()) return;
-    char ch = charsSequence.charAt(offset);
-
-    VimPlugin.showMessage("<" +
-                          StringHelper.toKeyNotation(KeyStroke.getKeyStroke(ch)) +
-                          ">  " +
-                          (int)ch +
-                          ",  Hex " +
-                          Long.toHexString(ch) +
-                          ",  Octal " +
-                          Long.toOctalString(ch));
   }
 
   public void displayHexInfo(@NotNull Editor editor) {
@@ -275,7 +293,7 @@ public class FileGroup {
       LogicalPosition lp = editor.getCaretModel().getLogicalPosition();
       int col = editor.getCaretModel().getOffset() - doc.getLineStartOffset(lp.line);
       int endoff = doc.getLineEndOffset(lp.line);
-      if (doc.getCharsSequence().charAt(endoff) == '\n') {
+      if (endoff < EditorHelperRt.getFileSize(editor) && doc.getCharsSequence().charAt(endoff) == '\n') {
         endoff--;
       }
       int ecol = endoff - doc.getLineStartOffset(lp.line);
@@ -301,14 +319,15 @@ public class FileGroup {
       msg.append("; Word ").append(cp.getPosition()).append(" of ").append(cp.getCount());
 
       int offset = editor.getCaretModel().getOffset();
-      int size = EditorHelper.getFileSize(editor);
+      int size = EditorHelperRt.getFileSize(editor);
 
       msg.append("; Character ").append(offset + 1).append(" of ").append(size);
     }
     else {
       msg.append("Selected ");
 
-      TextRange vr = new TextRange(editor.getSelectionModel().getBlockSelectionStarts(), editor.getSelectionModel().getBlockSelectionEnds());
+      TextRange vr = new TextRange(editor.getSelectionModel().getBlockSelectionStarts(),
+                                   editor.getSelectionModel().getBlockSelectionEnds());
       vr.normalize();
 
       int lines;
@@ -343,7 +362,7 @@ public class FileGroup {
       msg.append("; ").append(word).append(" of ").append(words).append(" Words");
 
       int chars = vr.getSelectionCount();
-      int size = EditorHelper.getFileSize(editor);
+      int size = EditorHelperRt.getFileSize(editor);
 
       msg.append("; ").append(chars).append(" of ").append(size).append(" Characters");
     }
@@ -403,14 +422,16 @@ public class FileGroup {
     VimPlugin.showMessage(msg.toString());
   }
 
-  @NotNull private static final String disposableKey = "VimFileGroupDisposable";
+  private static final @NotNull String disposableKey = "VimFileGroupDisposable";
 
-  @NotNull private static final HashMap<FileEditorManager, VirtualFile> lastSelections = new HashMap<>();
-  @NotNull private static final Logger logger = Logger.getInstance(FileGroup.class.getName());
+  private static final @NotNull HashMap<FileEditorManager, VirtualFile> lastSelections = new HashMap<>();
+  private static final @NotNull Logger logger = Logger.getInstance(FileGroup.class.getName());
 
   /**
    * This method listens for editor tab changes so any insert/replace modes that need to be reset can be.
    */
+  // I don't understand how to deal with these issues
+  @SuppressWarnings("deprecation")
   public static void fileEditorManagerSelectionChangedCallback(@NotNull FileEditorManagerEvent event) {
     // The user has changed the editor they are working with - exit insert/replace mode, and complete any
     // appropriate repeat
@@ -418,9 +439,8 @@ public class FileGroup {
       lastSelections.put(event.getManager(), event.getOldFile());
       String disposableKey = FileGroup.disposableKey + event.getManager().hashCode();
       if (Disposer.get(disposableKey) == null) {
-        Disposer.register(event.getManager().getProject(), () -> {
-          lastSelections.remove(event.getManager());
-        }, disposableKey);
+        VimProjectService parentDisposable = VimProjectService.getInstance(event.getManager().getProject());
+        Disposer.register(parentDisposable, () -> lastSelections.remove(event.getManager()), disposableKey);
       }
     }
   }

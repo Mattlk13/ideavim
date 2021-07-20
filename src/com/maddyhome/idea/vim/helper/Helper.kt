@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,18 +19,25 @@
 package com.maddyhome.idea.vim.helper
 
 import com.intellij.codeInsight.template.TemplateManager
+import com.intellij.codeWithMe.ClientId
 import com.intellij.injected.editor.EditorWindow
 import com.intellij.openapi.editor.Caret
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.Key
+import com.maddyhome.idea.vim.common.TextRange
 import java.util.*
 
 /**
  * This annotation is created for test functions (methods).
- * It means that original vim behavior has small differences from behavior of IdeaVim.
+ * It means that the original vim behavior has small differences from behavior of IdeaVim.
  * [shouldBeFixed] flag indicates whether the given functionality should be fixed
  *   or the given behavior is normal for IdeaVim and should be leaved as is.
  *
- * E.g. after execution some commands original vim has next text:
+ * E.g. after execution of some commands original vim has the following text:
  *    Hello1
  *    Hello2
  *    Hello3
@@ -41,9 +48,11 @@ import java.util.*
  *    Hello2
  *    Hello3
  *
- * Why this annotation exists?
+ * In this case you should still create the test function and mark this function with [VimBehaviorDiffers] annotation.
+ *
+ * Why does this annotation exist?
  * After creating some functionality you can understand that IdeaVim has a bit different behavior, but you
- *   cannot fix it right now because of any reasons (bugs in IDE,
+ *   cannot fix it right now because of any reason (bugs in IDE,
  *   the impossibility of this functionality in IDEA (*[shouldBeFixed] == false*), leak of time for fixing).
  *   In that case, you should NOT remove the corresponding test or leave it without any marks that this test
  *   not fully convenient with vim, but leave the test with IdeaVim's behavior and put this annotation
@@ -52,36 +61,12 @@ import java.util.*
  * Note that using this annotation should be avoided as much as possible and behavior of IdeaVim should be as close
  *   to vim as possible.
  */
-@Retention(AnnotationRetention.SOURCE)
 @Target(AnnotationTarget.FUNCTION)
 annotation class VimBehaviorDiffers(
   val originalVimAfter: String = "",
   val description: String = "",
-  val shouldBeFixed: Boolean = true
+  val shouldBeFixed: Boolean = true,
 )
-
-/**
- * [VimFunctionMark] and [VimTestFunction] are the simple annotations that simplify to bind test
- *   and functions that are used in that test, but aren't targets of this test
- *
- *   E.g. if you test `n` command and you want to use next command sequence `*n` you can put this test in
- *     SearchAgainNextActionTest test class (because main test target is `n` command) and annotate this function
- *     with @VimTestFunction("com.maddyhome.idea.vim.action.motion.search.SearchWholeWordForwardAction") to mark that
- *     this test also uses `*` command.
- *
- * [VimFunctionMark] should annotate some method or class and provide and unique label for it
- * [VimTestFunction] provides marks that point to commands that are tested with this function. Full class name or values
- *   of [VimFunctionMark] can be used as marks.
- *
- * These annotations doesn't affect code behavior, but created only for development purposes
- */
-@Retention(AnnotationRetention.SOURCE)
-@Target(AnnotationTarget.FUNCTION, AnnotationTarget.CLASS)
-annotation class VimFunctionMark(val value: String)
-
-@Retention(AnnotationRetention.SOURCE)
-@Target(AnnotationTarget.FUNCTION)
-annotation class VimTestFunction(vararg val value: String)
 
 fun <T : Comparable<T>> sort(a: T, b: T) = if (a > b) b to a else a to b
 
@@ -102,11 +87,40 @@ inline fun Editor.vimForEachCaret(action: (caret: Caret) -> Unit) {
 
 fun Editor.getTopLevelEditor() = if (this is EditorWindow) this.delegate else this
 
-fun Editor.isTemplateActive(): Boolean {
-  val project = this.project ?: return false
-  return TemplateManager.getInstance(project).getActiveTemplate(this) != null
+/**
+ * Return list of editors for local host (for code with me plugin)
+ */
+fun localEditors(): List<Editor> {
+  return EditorFactory.getInstance().allEditors.filter { editor -> editor.editorClientId.let { it == null || it == ClientId.currentOrNull } }
 }
 
+fun localEditors(doc: Document): List<Editor> {
+  return EditorFactory.getInstance().getEditors(doc)
+    .filter { editor -> editor.editorClientId.let { it == null || it == ClientId.currentOrNull } }
+}
+
+fun localEditors(doc: Document, project: Project): List<Editor> {
+  return EditorFactory.getInstance().getEditors(doc, project)
+    .filter { editor -> editor.editorClientId.let { it == null || it == ClientId.currentOrNull } }
+}
+
+val Editor.editorClientId: ClientId?
+  get() {
+    if (editorClientKey == null) {
+      @Suppress("DEPRECATION")
+      editorClientKey = Key.findKeyByName("editorClientIdby userData()") ?: return null
+    }
+    return editorClientKey?.let { this.getUserData(it) as? ClientId }
+  }
+
+private var editorClientKey: Key<*>? = null
+
+@Suppress("IncorrectParentDisposable")
+fun Editor.isTemplateActive(): Boolean {
+  val project = this.project ?: return false
+  if (Disposer.isDisposed(project)) return false
+  return TemplateManager.getInstance(project).getActiveTemplate(this) != null
+}
 
 /**
  * This annotations marks if annotated function required read or write lock
@@ -124,6 +138,7 @@ annotation class RWLockLabel {
    * [Writable] annotation means that annotated function should be called from write action
    * This annotation is only a marker and doesn't enable r/w lock automatically
    */
+  @Suppress("unused")
   @Target(AnnotationTarget.FUNCTION)
   annotation class Writable
 
@@ -141,3 +156,6 @@ annotation class RWLockLabel {
   @Target(AnnotationTarget.FUNCTION)
   annotation class NoLockRequired
 }
+
+val TextRange.endOffsetInclusive
+  get() = if (this.endOffset > 0 && this.endOffset > this.startOffset) this.endOffset - 1 else this.endOffset

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,9 @@
 
 package com.maddyhome.idea.vim.option;
 
+import com.intellij.util.ArrayUtil;
+import com.maddyhome.idea.vim.helper.VimNlsSafe;
+import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -30,7 +33,7 @@ import java.util.StringTokenizer;
  * This is an option that accepts an arbitrary list of values
  */
 public class ListOption extends TextOption {
-  @NotNull public final static ListOption empty = new ListOption("", "", new String[0], "");
+  public static final @NotNull ListOption empty = new ListOption("", "", ArrayUtil.EMPTY_STRING_ARRAY, "");
 
   /**
    * Gets the value of the option as a comma separated list of values
@@ -38,13 +41,9 @@ public class ListOption extends TextOption {
    * @return The option's value
    */
   @Override
-  @NotNull
-  public String getValue() {
-    StringBuffer res = new StringBuffer();
+  public @NotNull String getValue() {
+    StringBuilder res = new StringBuilder();
     int cnt = 0;
-    if (value == null) {
-      return "";
-    }
     for (String s : value) {
       if (cnt > 0) {
         res.append(",");
@@ -62,8 +61,7 @@ public class ListOption extends TextOption {
    *
    * @return The option's values
    */
-  @Nullable
-  public List<String> values() {
+  public @NotNull List<String> values() {
     return value;
   }
 
@@ -73,9 +71,9 @@ public class ListOption extends TextOption {
    * @param val A comma separated list of values to look for
    * @return True if all the supplied values are set in this option, false if not
    */
-  public boolean contains(String val) {
+  public boolean contains(@NonNls String val) {
     final List<String> vals = parseVals(val);
-    return value != null && vals != null && value.containsAll(vals);
+    return vals != null && value.containsAll(vals);
   }
 
   /**
@@ -131,41 +129,47 @@ public class ListOption extends TextOption {
       return false;
     }
 
-    value = vals;
-    fireOptionChangeEvent();
+    String oldValue = getValue();
+    this.value = vals;
+    fireOptionChangeEvent(oldValue, getValue());
 
     return true;
   }
 
   protected boolean append(@Nullable List<String> vals) {
-    if (vals == null || value == null) {
+    if (vals == null) {
       return false;
     }
 
+    String oldValue = getValue();
+    value.removeAll(vals);
     value.addAll(vals);
-    fireOptionChangeEvent();
+    fireOptionChangeEvent(oldValue, getValue());
 
     return true;
   }
 
   protected boolean prepend(@Nullable List<String> vals) {
-    if (vals == null || value == null) {
+    if (vals == null) {
       return false;
     }
 
+    String oldValue = getValue();
+    value.removeAll(vals);
     value.addAll(0, vals);
-    fireOptionChangeEvent();
+    fireOptionChangeEvent(oldValue, getValue());
 
     return true;
   }
 
   protected boolean remove(@Nullable List<String> vals) {
-    if (vals == null || value == null) {
+    if (vals == null) {
       return false;
     }
 
+    String oldValue = getValue();
     value.removeAll(vals);
-    fireOptionChangeEvent();
+    fireOptionChangeEvent(oldValue, getValue());
 
     return true;
   }
@@ -178,7 +182,7 @@ public class ListOption extends TextOption {
    * @param dflt    The option's default values
    * @param pattern A regular expression that is used to validate new values. null if no check needed
    */
-  ListOption(String name, String abbrev, String[] dflt, String pattern) {
+  public ListOption(@VimNlsSafe String name, @VimNlsSafe String abbrev, @VimNlsSafe String[] dflt, @VimNlsSafe String pattern) {
     super(name, abbrev);
 
     this.dflt = new ArrayList<>(Arrays.asList(dflt));
@@ -196,8 +200,7 @@ public class ListOption extends TextOption {
     return dflt.equals(value);
   }
 
-  @Nullable
-  protected List<String> parseVals(String val) {
+  protected @Nullable List<String> parseVals(String val) {
     List<String> res = new ArrayList<>();
     StringTokenizer tokenizer = new StringTokenizer(val, ",");
     while (tokenizer.hasMoreTokens()) {
@@ -218,13 +221,12 @@ public class ListOption extends TextOption {
    *
    * @return The option as a string {name}={value list}
    */
-  @NotNull
-  public String toString() {
+  public @NotNull String toString() {
     return "  " + getName() + "=" + getValue();
   }
 
-  @NotNull protected final List<String> dflt;
-  @Nullable protected List<String> value;
+  protected final @NotNull List<String> dflt;
+  protected @NotNull List<String> value;
   protected final String pattern;
 
   /**
@@ -233,8 +235,9 @@ public class ListOption extends TextOption {
   @Override
   public void resetDefault() {
     if (!dflt.equals(value)) {
+      String oldValue = getValue();
       value = new ArrayList<>(dflt);
-      fireOptionChangeEvent();
+      fireOptionChangeEvent(oldValue, getValue());
     }
   }
 }

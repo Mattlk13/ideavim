@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,12 +21,15 @@ package com.maddyhome.idea.vim.ui;
 import com.intellij.codeInsight.editorActions.CopyPastePostProcessor;
 import com.intellij.codeInsight.editorActions.TextBlockTransferable;
 import com.intellij.codeInsight.editorActions.TextBlockTransferableData;
+import com.intellij.ide.CopyPasteManagerEx;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.RawText;
+import com.maddyhome.idea.vim.helper.TestClipboardModel;
 import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
@@ -43,13 +46,12 @@ public class ClipboardHandler {
    *
    * @return The clipboard string or null if data isn't plain text
    */
-  @NotNull
-  public static Pair<String, List<TextBlockTransferableData>> getClipboardTextAndTransferableData() {
+  public static @Nullable Pair<String, List<TextBlockTransferableData>> getClipboardTextAndTransferableData() {
     String res = null;
     List<TextBlockTransferableData> transferableData = new ArrayList<>();
     try {
-      Clipboard board = Toolkit.getDefaultToolkit().getSystemClipboard();
-      Transferable trans = board.getContents(null);
+      Transferable trans = getContents();
+      if (trans == null) return null;
       Object data = trans.getTransferData(DataFlavor.stringFlavor);
 
       res = data.toString();
@@ -63,7 +65,8 @@ public class ClipboardHandler {
 
   private static List<TextBlockTransferableData> collectTransferableData(Transferable transferable) {
     List<TextBlockTransferableData> allValues = new ArrayList<>();
-    for (CopyPastePostProcessor<? extends TextBlockTransferableData> processor : CopyPastePostProcessor.EP_NAME.getExtensionList()) {
+    for (CopyPastePostProcessor<? extends TextBlockTransferableData> processor : CopyPastePostProcessor.EP_NAME
+      .getExtensionList()) {
       List<? extends TextBlockTransferableData> data = processor.extractTransferableData(transferable);
       if (!data.isEmpty()) {
         allValues.addAll(data);
@@ -81,10 +84,28 @@ public class ClipboardHandler {
     try {
       final String s = TextBlockTransferable.convertLineSeparators(text, "\n", transferableData);
       TextBlockTransferable content = new TextBlockTransferable(s, transferableData, new RawText(rawText));
-      Clipboard board = Toolkit.getDefaultToolkit().getSystemClipboard();
-      board.setContents(content, null);
+      setContents(content);
     }
     catch (HeadlessException ignored) {
+    }
+  }
+
+  private static @Nullable Transferable getContents() {
+    if (ApplicationManager.getApplication().isUnitTestMode()) {
+      return TestClipboardModel.INSTANCE.getContents();
+    }
+
+    CopyPasteManagerEx manager = CopyPasteManagerEx.getInstanceEx();
+    return manager.getContents();
+  }
+
+  private static void setContents(@NotNull Transferable contents) {
+    if (ApplicationManager.getApplication().isUnitTestMode()) {
+      TestClipboardModel.INSTANCE.setContents(contents);
+    }
+    else {
+      CopyPasteManagerEx copyPasteManager = CopyPasteManagerEx.getInstanceEx();
+      copyPasteManager.setContents(contents);
     }
   }
 }

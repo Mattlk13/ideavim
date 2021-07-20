@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,8 @@ import com.intellij.openapi.project.Project;
 import com.maddyhome.idea.vim.KeyHandler;
 import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.common.Register;
+import com.maddyhome.idea.vim.helper.MessageHelper;
+import com.maddyhome.idea.vim.helper.StringHelper;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -39,8 +41,8 @@ import java.util.List;
  * Used to handle playback of macros
  */
 public class MacroGroup {
-  public MacroGroup() {
-  }
+  private static final Logger logger = Logger.getInstance(MacroGroup.class.getName());
+  private char lastRegister = 0;
 
   /**
    * This method is used to play the macro of keystrokes stored in the specified registers.
@@ -52,7 +54,11 @@ public class MacroGroup {
    * @param count   The number of times to execute the macro
    * @return true if able to play the macro, false if invalid or empty register
    */
-  public boolean playbackRegister(@NotNull Editor editor, @NotNull DataContext context, @Nullable Project project, char reg, int count) {
+  public boolean playbackRegister(@NotNull Editor editor,
+                                  @NotNull DataContext context,
+                                  @Nullable Project project,
+                                  char reg,
+                                  int count) {
     if (logger.isDebugEnabled()) {
       logger.debug("play bakc register " + reg + " " + count + " times");
     }
@@ -60,8 +66,13 @@ public class MacroGroup {
     if (register == null) {
       return false;
     }
-
-    List<KeyStroke> keys = register.getKeys();
+    List<KeyStroke> keys;
+    if (register.getRawText() == null) {
+      keys = register.getKeys();
+    }
+    else {
+      keys = StringHelper.parseKeys(register.getRawText());
+    }
     playbackKeys(editor, context, project, keys, 0, 0, count);
 
     lastRegister = reg;
@@ -78,7 +89,10 @@ public class MacroGroup {
    * @param count   The number of times to execute the macro
    * @return true if able to play the macro, false in no previous playback
    */
-  public boolean playbackLastRegister(@NotNull Editor editor, @NotNull DataContext context, @Nullable Project project, int count) {
+  public boolean playbackLastRegister(@NotNull Editor editor,
+                                      @NotNull DataContext context,
+                                      @Nullable Project project,
+                                      int count) {
     return lastRegister != 0 && playbackRegister(editor, context, project, lastRegister, count);
   }
 
@@ -93,8 +107,13 @@ public class MacroGroup {
    * @param cnt     count
    * @param total   total
    */
-  public void playbackKeys(@NotNull final Editor editor, @NotNull final DataContext context, @Nullable final Project project,
-                           @NotNull final List<KeyStroke> keys, final int pos, final int cnt, final int total) {
+  public void playbackKeys(final @NotNull Editor editor,
+                           final @NotNull DataContext context,
+                           final @Nullable Project project,
+                           final @NotNull List<KeyStroke> keys,
+                           final int pos,
+                           final int cnt,
+                           final int total) {
     if (logger.isDebugEnabled()) {
       logger.debug("playbackKeys " + pos);
     }
@@ -126,8 +145,8 @@ public class MacroGroup {
       }
     };
 
-    ApplicationManager.getApplication().invokeLater(
-        () -> CommandProcessor.getInstance().executeCommand(project, run, "Vim Macro Playback", keys.get(pos)));
+    ApplicationManager.getApplication().invokeLater(() -> CommandProcessor.getInstance()
+      .executeCommand(project, run, MessageHelper.message("command.name.vim.macro.playback"), keys.get(pos)));
   }
 
   public void postKey(@NotNull KeyStroke stroke, @NotNull Editor editor) {
@@ -141,13 +160,9 @@ public class MacroGroup {
     });
   }
 
-  @NotNull
-  private KeyEvent createKeyEvent(@NotNull KeyStroke stroke, Component component) {
+  private @NotNull KeyEvent createKeyEvent(@NotNull KeyStroke stroke, Component component) {
     return new KeyEvent(component,
                         stroke.getKeyChar() == KeyEvent.CHAR_UNDEFINED ? KeyEvent.KEY_PRESSED : KeyEvent.KEY_TYPED,
                         System.currentTimeMillis(), stroke.getModifiers(), stroke.getKeyCode(), stroke.getKeyChar());
   }
-
-  private char lastRegister = 0;
-  private static final Logger logger = Logger.getInstance(MacroGroup.class.getName());
 }

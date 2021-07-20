@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,72 +18,88 @@
 
 package com.maddyhome.idea.vim.command
 
+enum class MotionType {
+  INCLUSIVE,
+  EXCLUSIVE,
+  LINE_WISE
+}
+
+enum class TextObjectVisualType {
+  CHARACTER_WISE,
+  LINE_WISE
+}
+
 enum class CommandFlags {
   /**
    * Motion flags
+   *
+   * TODO it should be only INCLUSIVE, EXCLUSIVE and LINEWISE motions. Should be moved to [MotionType]
    */
   FLAG_MOT_LINEWISE,
-  FLAG_MOT_CHARACTERWISE,
-  FLAG_MOT_BLOCKWISE,
-  FLAG_MOT_INCLUSIVE,
-  FLAG_MOT_EXCLUSIVE,
+
   /**
    * Indicates that the cursor position should be saved prior to this motion command
    */
   FLAG_SAVE_JUMP,
+
   /**
-   * Special flag that says this is characterwise only for visual mode
+   * A special command flag indicating that the inserted text after this command will not be repeated.
+   * Example: `2i123` will insert `123123`, but `2s123` will insert `123`
    */
-  FLAG_VISUAL_CHARACTERWISE,
-  /**
-   * Special command flag that indicates it is not to be repeated
-   */
-  FLAG_NO_REPEAT,
+  FLAG_NO_REPEAT_INSERT,
+
   /**
    * This insert command should clear all saved keystrokes from the current insert
    */
   FLAG_CLEAR_STROKES,
+
   /**
    * This keystroke should be saved as part of the current insert
    */
   FLAG_SAVE_STROKE,
+
+  /**
+   * Don't include scrolljump when adjusting the scroll area to ensure the current cursor position is visible.
+   * Should be used for commands that adjust the scroll area (such as <C-D> or <C-E>).
+   * Technically, the current implementation doesn't need these flags, as these commands adjust the scroll area
+   * according to their own rules and then move the cursor to fit (e.g. move cursor down a line with <C-E>). Moving the
+   * cursor always tries to adjust the scroll area to ensure it's visible, which in this case is always a no-op.
+   * This is an implementation detail, so keep the flags for both documentation and in case of refactoring.
+   */
   FLAG_IGNORE_SCROLL_JUMP,
   FLAG_IGNORE_SIDE_SCROLL_JUMP,
-  /**
-   * Indicates a command can accept a count in mid command
-   */
-  FLAG_ALLOW_MID_COUNT,
-  /**
-   * Search Flags
-   */
-  FLAG_SEARCH_FWD,
-  FLAG_SEARCH_REV,
+
   /**
    * Command exits the visual mode, so caret movement shouldn't update visual selection
    */
   FLAG_EXIT_VISUAL,
-  /**
-   * Special flag used for any mappings involving operators
-   */
-  FLAG_OP_PEND,
+
   /**
    * This command starts a multi-command undo transaction
    */
   FLAG_MULTIKEY_UNDO,
+
   /**
    * This command should be followed by another command
    */
   FLAG_EXPECT_MORE,
-  /**
-   * This flag indicates the command's argument isn't used while recording
-   */
-  FLAG_NO_ARG_RECORDING,
+
   /**
    * Indicate that the character argument may come from a digraph
    */
   FLAG_ALLOW_DIGRAPH,
+
+  /**
+   * Indicates that a command handles completing ex input.
+   *
+   * When performing a search, the search action command requires an EX_STRING as input. This is completed by a command
+   * that has FLAG_COMPLETE_EX. That command isn't called and the ex string becomes an argument for the previous command
+   * that started the EX_STRING.
+   */
   FLAG_COMPLETE_EX,
+
   FLAG_TEXT_BLOCK,
+
   /**
    * Some IDE actions do enable `typeahead` option for proper popups handling.
    *   There actions are GoToClass, GoToFile, SearchEverywhere and so on. With this options enabled if vim-action is

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,21 +26,17 @@ import com.intellij.openapi.fileEditor.impl.EditorWithProviderComposite;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.maddyhome.idea.vim.VimPlugin;
+import com.maddyhome.idea.vim.helper.MessageHelper;
 import com.maddyhome.idea.vim.helper.RWLockLabel;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.*;
 
 public class WindowGroup {
-  public WindowGroup() {
-  }
-
   public void closeCurrentWindow(@NotNull DataContext context) {
     final FileEditorManagerEx fileEditorManager = getFileEditorManager(context);
     final EditorWindow window = fileEditorManager.getSplitters().getCurrentWindow();
@@ -119,9 +115,8 @@ public class WindowGroup {
     windows.get(normalized).setAsCurrentWindow(true);
   }
 
-  @NotNull
-  private static List<EditorWindow> findWindowsInRow(@NotNull EditorWindow anchor,
-                                                     @NotNull List<EditorWindow> windows, final boolean vertical) {
+  private static @NotNull List<EditorWindow> findWindowsInRow(@NotNull EditorWindow anchor,
+                                                              @NotNull List<EditorWindow> windows, final boolean vertical) {
     final Rectangle anchorRect = getEditorWindowRectangle(anchor);
     if (anchorRect != null) {
       final List<EditorWindow> result = new ArrayList<>();
@@ -150,21 +145,21 @@ public class WindowGroup {
     return Collections.singletonList(anchor);
   }
 
-  @NotNull
-  private static FileEditorManagerEx getFileEditorManager(@NotNull DataContext context) {
+  private static @NotNull FileEditorManagerEx getFileEditorManager(@NotNull DataContext context) {
     final Project project = PlatformDataKeys.PROJECT.getData(context);
-    return FileEditorManagerEx.getInstanceEx(project);
+    return FileEditorManagerEx.getInstanceEx(Objects.requireNonNull(project));
   }
 
   private void splitWindow(int orientation, @NotNull DataContext context, @NotNull String filename) {
     final Project project = PlatformDataKeys.PROJECT.getData(context);
+    if (project == null) return;
     final FileEditorManagerEx fileEditorManager = FileEditorManagerEx.getInstanceEx(project);
 
     VirtualFile virtualFile = null;
-    if (filename.length() > 0 && project != null) {
+    if (filename.length() > 0) {
       virtualFile = VimPlugin.getFile().findFile(filename, project);
       if (virtualFile == null) {
-        VimPlugin.showMessage("Could not find file: " + filename);
+        VimPlugin.showMessage(MessageHelper.message("could.not.find.file.0", filename));
         return;
       }
     }
@@ -175,8 +170,7 @@ public class WindowGroup {
     }
   }
 
-  @Nullable
-  private static Rectangle getEditorWindowRectangle(@NotNull EditorWindow window) {
+  private static @Nullable Rectangle getEditorWindowRectangle(@NotNull EditorWindow window) {
     final EditorWithProviderComposite editor = window.getSelectedEditor();
     if (editor != null) {
       final Point point = editor.getComponent().getLocationOnScreen();

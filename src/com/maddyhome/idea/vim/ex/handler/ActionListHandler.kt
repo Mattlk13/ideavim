@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,21 +22,30 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.editor.Editor
-import com.maddyhome.idea.vim.ex.*
+import com.maddyhome.idea.vim.ex.CommandHandler
+import com.maddyhome.idea.vim.ex.CommandHandler.Access.READ_ONLY
+import com.maddyhome.idea.vim.ex.CommandHandler.ArgumentFlag.ARGUMENT_OPTIONAL
+import com.maddyhome.idea.vim.ex.CommandHandler.RangeFlag.RANGE_FORBIDDEN
+import com.maddyhome.idea.vim.ex.CommandHandlerFlags
+import com.maddyhome.idea.vim.ex.ExCommand
+import com.maddyhome.idea.vim.ex.ExOutputModel
+import com.maddyhome.idea.vim.ex.flags
+import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.helper.StringHelper
 
 /**
  * @author smartbomb
  */
 class ActionListHandler : CommandHandler.SingleExecution() {
-  override val names: Array<CommandName> = commands("actionlist")
-  override val argFlags: CommandHandlerFlags = flags(RangeFlag.RANGE_FORBIDDEN, ArgumentFlag.ARGUMENT_OPTIONAL, Access.READ_ONLY)
+  override val argFlags: CommandHandlerFlags = flags(RANGE_FORBIDDEN, ARGUMENT_OPTIONAL, READ_ONLY)
 
   override fun execute(editor: Editor, context: DataContext, cmd: ExCommand): Boolean {
     val lineSeparator = "\n"
     val searchPattern = cmd.argument.trim().toLowerCase().split("*")
     val actionManager = ActionManager.getInstance()
 
+    // [VERSION UPDATE] 203+
+    @Suppress("DEPRECATION")
     val actions = actionManager.getActionIds("")
       .sortedWith(String.CASE_INSENSITIVE_ORDER)
       .map { actionName ->
@@ -48,8 +57,7 @@ class ActionListHandler : CommandHandler.SingleExecution() {
       .filter { line -> searchPattern.all { it in line.toLowerCase() } }
       .joinToString(lineSeparator)
 
-
-    ExOutputModel.getInstance(editor).output("--- Actions ---$lineSeparator$actions")
+    ExOutputModel.getInstance(editor).output(MessageHelper.message("ex.show.all.actions.0.1", lineSeparator, actions))
     return true
   }
 }

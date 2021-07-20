@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,60 +18,51 @@
 
 package com.maddyhome.idea.vim.action.motion.updown
 
-import com.intellij.codeInsight.template.TemplateManager
 import com.intellij.codeInsight.template.impl.TemplateManagerImpl
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
+import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.action.MotionEditorAction
 import com.maddyhome.idea.vim.command.Argument
-import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.command.MappingMode
+import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.handler.Motion
 import com.maddyhome.idea.vim.handler.MotionActionHandler
-import java.util.*
-import javax.swing.KeyStroke
+import com.maddyhome.idea.vim.handler.toMotion
 
-class MotionDownFirstNonSpaceAction : MotionEditorAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.NVO
+class MotionDownFirstNonSpaceAction : MotionActionHandler.ForEachCaret() {
+  override val motionType: MotionType = MotionType.LINE_WISE
 
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("+", "<C-M>")
-
-  override val flags: EnumSet<CommandFlags> = EnumSet.of(CommandFlags.FLAG_MOT_LINEWISE)
-
-  public override fun makeActionHandler(): MotionActionHandler = object : MotionActionHandler.ForEachCaret() {
-    override fun getOffset(editor: Editor,
-                           caret: Caret,
-                           context: DataContext,
-                           count: Int,
-                           rawCount: Int,
-                           argument: Argument?): Int {
-      return VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, count)
-    }
+  override fun getOffset(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): Motion {
+    return VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, count).toMotion()
   }
 }
 
-class EnterNormalAction : MotionEditorAction() {
-  override val mappingModes: Set<MappingMode> = MappingMode.NVO
+class EnterNormalAction : MotionActionHandler.ForEachCaret() {
+  override val motionType: MotionType = MotionType.LINE_WISE
 
-  override val keyStrokesSet: Set<List<KeyStroke>> = parseKeysSet("<CR>")
-
-  override val flags: EnumSet<CommandFlags> = EnumSet.of(CommandFlags.FLAG_MOT_LINEWISE)
-
-  public override fun makeActionHandler(): MotionActionHandler = object : MotionActionHandler.ForEachCaret() {
-    override fun getOffset(editor: Editor,
-                           caret: Caret,
-                           context: DataContext,
-                           count: Int,
-                           rawCount: Int,
-                           argument: Argument?): Int {
-      val templateState = TemplateManagerImpl.getTemplateState(editor)
-      return if (templateState != null) {
-        templateState.gotoEnd(false)
-        -1
-      } else {
-        VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, count)
-      }
+  override fun getOffset(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    count: Int,
+    rawCount: Int,
+    argument: Argument?,
+  ): Motion {
+    val templateState = TemplateManagerImpl.getTemplateState(editor)
+    return if (templateState != null) {
+      KeyHandler.executeAction(IdeActions.ACTION_EDITOR_NEXT_TEMPLATE_VARIABLE, context)
+      Motion.NoMotion
+    } else {
+      VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, count).toMotion()
     }
   }
 }

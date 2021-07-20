@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,12 +26,13 @@ import com.maddyhome.idea.vim.KeyHandler;
 import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.command.CommandState;
 import com.maddyhome.idea.vim.ex.vimscript.VimScriptGlobalEnvironment;
+import com.maddyhome.idea.vim.group.visual.VimVisualTimer;
 import com.maddyhome.idea.vim.helper.EditorDataContext;
 import com.maddyhome.idea.vim.helper.RunnableHelper;
 import com.maddyhome.idea.vim.helper.TestInputModel;
 import com.maddyhome.idea.vim.option.OptionsManager;
 import com.maddyhome.idea.vim.option.ToggleOption;
-import com.maddyhome.idea.vim.ui.ExEntryPanel;
+import com.maddyhome.idea.vim.ui.ex.ExEntryPanel;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -40,7 +41,8 @@ import java.util.List;
 
 /**
  * NB: We need to extend from JavaCodeInsightFixtureTestCase so we
- *  can create PsiFiles with proper Java Language type
+ * can create PsiFiles with proper Java Language type
+ *
  * @author dhleong
  */
 public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
@@ -48,15 +50,23 @@ public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
   protected void setUp() throws Exception {
     super.setUp();
 
-    KeyHandler.getInstance().fullReset(myFixture.getEditor());
+    Editor editor = myFixture.getEditor();
+    if (editor != null) {
+      KeyHandler.getInstance().fullReset(editor);
+    }
     OptionsManager.INSTANCE.resetAllOptions();
     VimPlugin.getKey().resetKeyMappings();
+    VimPlugin.clearError();
   }
 
   @Override
   protected void tearDown() throws Exception {
     ExEntryPanel.getInstance().deactivate(false);
     VimScriptGlobalEnvironment.getInstance().getVariables().clear();
+    Timer swingTimer = VimVisualTimer.INSTANCE.getSwingTimer();
+    if (swingTimer != null) {
+      swingTimer.stop();
+    }
     super.tearDown();
   }
 
@@ -68,15 +78,11 @@ public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
     }
   }
 
-  @NotNull
-  protected Editor configureByJavaText(@NotNull String content) {
-    myFixture.configureByText(JavaFileType.INSTANCE, content);
-    return myFixture.getEditor();
-  }
-
   public void doTest(final List<KeyStroke> keys, String before, String after) {
-    configureByJavaText(before);
+    //noinspection IdeaVimAssertState
+    myFixture.configureByText(JavaFileType.INSTANCE, before);
     typeText(keys);
+    //noinspection IdeaVimAssertState
     myFixture.checkResult(after);
   }
 
@@ -84,7 +90,7 @@ public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
   protected Editor typeText(@NotNull List<KeyStroke> keys) {
     final Editor editor = myFixture.getEditor();
     final KeyHandler keyHandler = KeyHandler.getInstance();
-    final EditorDataContext dataContext = new EditorDataContext(editor);
+    final EditorDataContext dataContext = EditorDataContext.init(editor, null);
     final Project project = myFixture.getProject();
     TestInputModel.getInstance(editor).setKeyStrokes(keys);
     RunnableHelper.runWriteCommand(project, () -> {

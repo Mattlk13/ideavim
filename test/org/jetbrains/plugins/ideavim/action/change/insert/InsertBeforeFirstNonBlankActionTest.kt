@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,12 +19,15 @@
 package org.jetbrains.plugins.ideavim.action.change.insert
 
 import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 class InsertBeforeFirstNonBlankActionTest : VimTestCase() {
+  @TestWithoutNeovim(SkipNeovimReason.MULTICARET)
   fun `test insert multiple carets`() {
-    doTest(parseKeys("IHello<esc>"),
+    doTest(
+      "IHello<esc>",
       """
                 ${c}A Discovery
 
@@ -32,7 +35,7 @@ class InsertBeforeFirstNonBlankActionTest : VimTestCase() {
                 all rocks and ${c}lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 Hell${c}oA Discovery
 
@@ -40,9 +43,10 @@ class InsertBeforeFirstNonBlankActionTest : VimTestCase() {
                 Hell${c}oall rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 }

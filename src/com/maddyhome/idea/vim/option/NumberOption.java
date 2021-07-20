@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 
 package com.maddyhome.idea.vim.option;
 
+import com.maddyhome.idea.vim.helper.VimNlsSafe;
+import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -25,6 +27,11 @@ import org.jetbrains.annotations.Nullable;
  * Represents an option with a numeric value
  */
 public class NumberOption extends TextOption {
+  private final int dflt;
+  private final int min;
+  private final int max;
+  private int value;
+
   /**
    * Creates a number option that must contain a zero or positive value
    *
@@ -32,7 +39,7 @@ public class NumberOption extends TextOption {
    * @param abbrev The short name
    * @param dflt   The default value
    */
-  NumberOption(String name, String abbrev, int dflt) {
+  NumberOption(@NonNls String name, @NonNls String abbrev, int dflt) {
     this(name, abbrev, dflt, 0, Integer.MAX_VALUE);
   }
 
@@ -45,12 +52,13 @@ public class NumberOption extends TextOption {
    * @param min    The option's minimum value
    * @param max    The option's maximum value
    */
-  NumberOption(String name, String abbrev, int dflt, int min, int max) {
+  @SuppressWarnings("SameParameterValue")
+  NumberOption(@VimNlsSafe String name, @VimNlsSafe String abbrev, int dflt, int min, int max) {
     super(name, abbrev);
     this.dflt = dflt;
     this.value = dflt;
     this.min = min;
-    this.max = Integer.MAX_VALUE;
+    this.max = max;
   }
 
   /**
@@ -99,8 +107,10 @@ public class NumberOption extends TextOption {
     }
 
     if (inRange(num)) {
-      value = num;
-      fireOptionChangeEvent();
+
+      String oldValue = getValue();
+      this.value = num;
+      fireOptionChangeEvent(oldValue, getValue());
 
       return true;
     }
@@ -125,8 +135,9 @@ public class NumberOption extends TextOption {
     }
 
     if (inRange(value + num)) {
+      String oldValue = getValue();
       value += num;
-      fireOptionChangeEvent();
+      fireOptionChangeEvent(oldValue, getValue());
 
       return true;
     }
@@ -151,8 +162,9 @@ public class NumberOption extends TextOption {
     }
 
     if (inRange(value * num)) {
+      String oldValue = getValue();
       value *= num;
-      fireOptionChangeEvent();
+      fireOptionChangeEvent(oldValue, getValue());
 
       return true;
     }
@@ -177,8 +189,9 @@ public class NumberOption extends TextOption {
     }
 
     if (inRange(value - num)) {
+      String oldValue = getValue();
       value -= num;
-      fireOptionChangeEvent();
+      fireOptionChangeEvent(oldValue, getValue());
 
       return true;
     }
@@ -202,13 +215,13 @@ public class NumberOption extends TextOption {
   @Override
   public void resetDefault() {
     if (dflt != value) {
+      String oldValue = getValue();
       value = dflt;
-      fireOptionChangeEvent();
+      fireOptionChangeEvent(oldValue, getValue());
     }
   }
 
-  @Nullable
-  protected Integer asNumber(String val) {
+  protected @Nullable Integer asNumber(String val) {
     try {
       return Integer.decode(val);
     }
@@ -226,14 +239,8 @@ public class NumberOption extends TextOption {
    *
    * @return The option as a string
    */
-  @NotNull
-  public String toString() {
+  public @NotNull String toString() {
 
     return "  " + getName() + "=" + value;
   }
-
-  private final int dflt;
-  private int value;
-  private final int min;
-  private final int max;
 }

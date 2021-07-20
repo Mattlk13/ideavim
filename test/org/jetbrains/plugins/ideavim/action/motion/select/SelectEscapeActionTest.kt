@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,12 +20,15 @@ package org.jetbrains.plugins.ideavim.action.motion.select
 
 import com.intellij.openapi.editor.Caret
 import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 class SelectEscapeActionTest : VimTestCase() {
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit char mode`() {
-    this.doTest(parseKeys("gh", "<esc>"),
+    this.doTest(
+      listOf("gh", "<esc>"),
       """
                 A Discovery
 
@@ -33,7 +36,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -41,14 +44,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit char mode on line start`() {
-    this.doTest(parseKeys("gh", "<esc>"),
+    this.doTest(
+      listOf("gh", "<esc>"),
       """
                 A Discovery
 
@@ -56,22 +62,25 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
-                I${c} found it in a legendary land
+                I$c found it in a legendary land
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit char mode on line end`() {
-    this.doTest(parseKeys("gh", "<esc>"),
+    this.doTest(
+      listOf("gh", "<esc>"),
       """
                 A Discovery
 
@@ -79,7 +88,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -87,14 +96,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit char mode on file start`() {
-    this.doTest(parseKeys("gh", "<S-Left>", "<esc>"),
+    this.doTest(
+      listOf("gh", "<S-Left>", "<esc>"),
       """
                 ${c}A Discovery
 
@@ -102,7 +114,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 ${c}A Discovery
 
@@ -110,14 +122,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit char mode on empty line`() {
-    this.doTest(parseKeys("gh", "<esc>"),
+    this.doTest(
+      listOf("gh", "<esc>"),
       """
                 A Discovery
                 $c
@@ -125,7 +140,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
                 $c
@@ -133,14 +148,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit char mode multicaret`() {
-    this.doTest(parseKeys("gh", "<esc>"),
+    this.doTest(
+      listOf("gh", "<esc>"),
       """
                 A Discovery
 
@@ -148,7 +166,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks ${c}and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -156,14 +174,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks a${c}nd lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit in select line mode`() {
-    this.doTest(parseKeys("gH", "<esc>"),
+    this.doTest(
+      listOf("gH", "<esc>"),
       """
                 A Discovery
 
@@ -171,7 +192,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -179,14 +200,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit line mode line end`() {
-    this.doTest(parseKeys("gH", "<esc>"),
+    this.doTest(
+      listOf("gH", "<esc>"),
       """
                 A Discovery
 
@@ -194,7 +218,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -202,14 +226,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit line mode file start`() {
-    this.doTest(parseKeys("gH", "<esc>"),
+    this.doTest(
+      listOf("gH", "<esc>"),
       """
                 ${c}A Discovery
 
@@ -217,7 +244,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 ${c}A Discovery
 
@@ -225,14 +252,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit line mode empty line`() {
-    this.doTest(parseKeys("gH", "<esc>"),
+    this.doTest(
+      listOf("gH", "<esc>"),
       """
                 A Discovery
                 $c
@@ -240,7 +270,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
                 $c
@@ -248,14 +278,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit line mode multicaret`() {
-    this.doTest(parseKeys("gH", "<esc>"),
+    this.doTest(
+      listOf("gH", "<esc>"),
       """
                 A Discovery
 
@@ -263,7 +296,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks ${c}and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -271,14 +304,17 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks ${c}and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit in select block mode`() {
-    this.doTest(parseKeys("g<C-H>", "<esc>"),
+    this.doTest(
+      listOf("g<C-H>", "<esc>"),
       """
                 A Discovery
 
@@ -286,7 +322,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -294,17 +330,20 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertFalse(myFixture.editor.caretModel.allCarets.any(Caret::hasSelection))
     assertEquals(1, myFixture.editor.caretModel.caretCount)
     assertCaretsColour()
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit block mode with motion`() {
-    this.doTest(parseKeys("g<C-H>", "<S-Down>", "<S-Right>", "<esc>"),
+    this.doTest(
+      listOf("g<C-H>", "<S-Down>", "<S-Right>", "<esc>"),
       """
                 A Discovery
 
@@ -312,7 +351,7 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -320,17 +359,20 @@ class SelectEscapeActionTest : VimTestCase() {
                 all ${c}rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertFalse(myFixture.editor.caretModel.allCarets.any(Caret::hasSelection))
     assertEquals(1, myFixture.editor.caretModel.caretCount)
     assertCaretsColour()
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit block mode on longer line`() {
-    this.doTest(parseKeys("g<C-H>", "<S-Down>", "<S-Right>".repeat(3), "<esc>"),
+    this.doTest(
+      listOf("g<C-H>", "<S-Down>", "<S-Right>".repeat(3), "<esc>"),
       """
                 A Discovery
 
@@ -338,33 +380,36 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
                 I found it in a legendary land
-                all rocks and lavender and tufted${c} grass,
+                all rocks and lavender and tufted$c grass,
                 where it was settled on some sodden sand
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertFalse(myFixture.editor.caretModel.allCarets.any(Caret::hasSelection))
     assertEquals(1, myFixture.editor.caretModel.caretCount)
     assertCaretsColour()
     assertMode(CommandState.Mode.COMMAND)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.SELECT_MODE)
   fun `test exit block mode on longer line till end`() {
-    this.doTest(parseKeys("g<C-H>", "<S-Down>", "<S-Right>".repeat(5), "<esc>"),
+    this.doTest(
+      listOf("g<C-H>", "<S-Down>", "<S-Right>".repeat(5), "<esc>"),
       """
                 A Discovery
 
                 I found it in a legendary land
-                all rocks and lavender and tufted grass${c},
+                all rocks and lavender and tufted grass$c,
                 where it was settled on some sodden sand123
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       """
                 A Discovery
 
@@ -372,9 +417,10 @@ class SelectEscapeActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
                 where it was settled on some sodden sand12${c}3
                 hard by the torrent of a mountain pass.
-                    """.trimIndent(),
+      """.trimIndent(),
       CommandState.Mode.COMMAND,
-      CommandState.SubMode.NONE)
+      CommandState.SubMode.NONE
+    )
     assertFalse(myFixture.editor.caretModel.allCarets.any(Caret::hasSelection))
     assertEquals(1, myFixture.editor.caretModel.caretCount)
     assertCaretsColour()

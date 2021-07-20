@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.common.TextRange
 import com.maddyhome.idea.vim.helper.mode
 import com.maddyhome.idea.vim.option.OptionsManager
-import junit.framework.TestCase
+import kotlin.test.fail
 
 /**
  * @author Alex Plate
@@ -69,10 +69,14 @@ inline fun waitAndAssert(timeInMillis: Int = 1000, condition: () -> Boolean) {
     IdeEventQueue.getInstance().flushQueue()
     if (condition()) return
   }
-  TestCase.fail()
+  fail()
 }
 
-fun waitAndAssertMode(fixture: CodeInsightTestFixture, mode: CommandState.Mode, timeInMillis: Int = OptionsManager.visualEnterDelay.value() + 1000) {
+fun waitAndAssertMode(
+  fixture: CodeInsightTestFixture,
+  mode: CommandState.Mode,
+  timeInMillis: Int = OptionsManager.visualEnterDelay.value() + 1000,
+) {
   waitAndAssert(timeInMillis) { fixture.editor.mode == mode }
 }
 
@@ -80,10 +84,33 @@ fun assertDoesntChange(timeInMillis: Int = 1000, condition: () -> Boolean) {
   val end = System.currentTimeMillis() + timeInMillis
   while (end > System.currentTimeMillis()) {
     if (!condition()) {
-      TestCase.fail()
-      return
+      fail()
     }
+
     Thread.sleep(10)
     IdeEventQueue.getInstance().flushQueue()
   }
+}
+
+fun assertHappened(timeInMillis: Int = 1000, precision: Int, condition: () -> Boolean) {
+  assertDoesntChange(timeInMillis - precision) { !condition() }
+
+  waitAndAssert(precision * 2) { condition() }
+}
+
+@Suppress("unused")
+fun waitCondition(
+  durationMillis: Long,
+  interval: Long = 500,
+  condition: () -> Boolean,
+): Boolean {
+  val endTime = System.currentTimeMillis() + durationMillis
+  while (System.currentTimeMillis() < endTime) {
+    if (condition())
+      return true
+    else {
+      Thread.sleep(interval)
+    }
+  }
+  return false
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +19,9 @@
 package org.jetbrains.plugins.ideavim.option
 
 import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
 import com.maddyhome.idea.vim.option.OptionsManager
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 /**
@@ -28,83 +29,107 @@ import org.jetbrains.plugins.ideavim.VimTestCase
  */
 // TODO: 2019-06-18 VimOptionsTestCase
 class DigraphTest : VimTestCase() {
+  @TestWithoutNeovim(SkipNeovimReason.UNCLEAR, "backspace works strange")
   fun `test digraph`() {
     OptionsManager.digraph.set()
 
-    doTest(parseKeys("i B<BS>B"), """
+    doTest(
+      "i B<BS>B",
+      """
             A Discovery
 
-            I found it${c} in a legendary land
+            I found it$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), """
+      """.trimIndent(),
+      """
             A Discovery
 
-            I found it ¦${c} in a legendary land
+            I found it ¦$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), CommandState.Mode.INSERT, CommandState.SubMode.NONE)
+      """.trimIndent(),
+      CommandState.Mode.INSERT, CommandState.SubMode.NONE
+    )
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.UNCLEAR, "backspace works strange")
   fun `test digraph stops`() {
     OptionsManager.digraph.set()
 
-    doTest(parseKeys("i B<BS>BHello"), """
+    doTest(
+      "i B<BS>BHello",
+      """
             A Discovery
 
-            I found it${c} in a legendary land
+            I found it$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), """
+      """.trimIndent(),
+      """
             A Discovery
 
-            I found it ¦Hello${c} in a legendary land
+            I found it ¦Hello$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), CommandState.Mode.INSERT, CommandState.SubMode.NONE)
+      """.trimIndent(),
+      CommandState.Mode.INSERT, CommandState.SubMode.NONE
+    )
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.UNCLEAR, "backspace works strange")
   fun `test digraph double backspace`() {
     OptionsManager.digraph.set()
 
-    doTest(parseKeys("i B<BS><BS>B"), """
+    doTest(
+      "i B<BS><BS>B",
+      """
             A Discovery
 
-            I found it${c} in a legendary land
+            I found it$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), """
+      """.trimIndent(),
+      """
             A Discovery
 
-            I found itB${c} in a legendary land
+            I found itB$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), CommandState.Mode.INSERT, CommandState.SubMode.NONE)
+      """.trimIndent(),
+      CommandState.Mode.INSERT, CommandState.SubMode.NONE
+    )
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.UNCLEAR, "backspace works strange")
   fun `test digraph backspace digraph`() {
     OptionsManager.digraph.set()
 
-    doTest(parseKeys("i B<BS>B<BS>B"), """
+    doTest(
+      "i B<BS>B<BS>B",
+      """
             A Discovery
 
-            I found it${c} in a legendary land
+            I found it$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), """
+      """.trimIndent(),
+      """
             A Discovery
 
-            I found it B${c} in a legendary land
+            I found it B$c in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent(), CommandState.Mode.INSERT, CommandState.SubMode.NONE)
+      """.trimIndent(),
+      CommandState.Mode.INSERT, CommandState.SubMode.NONE
+    )
   }
 }

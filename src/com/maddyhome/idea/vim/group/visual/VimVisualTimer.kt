@@ -1,9 +1,26 @@
+/*
+ * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
+ * Copyright (C) 2003-2021 The IdeaVim authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.maddyhome.idea.vim.group.visual
 
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.group.visual.VimVisualTimer.mode
 import com.maddyhome.idea.vim.group.visual.VimVisualTimer.singleTask
-import com.maddyhome.idea.vim.helper.hasVisualSelection
 import com.maddyhome.idea.vim.option.OptionsManager
 import javax.swing.Timer
 
@@ -48,16 +65,14 @@ object VimVisualTimer {
   var swingTimer: Timer? = null
   var mode: CommandState.Mode? = null
 
-  inline fun singleTask(editorHasSelection: Boolean, currentMode: CommandState.Mode, crossinline task: () -> Unit) {
+  inline fun singleTask(currentMode: CommandState.Mode, crossinline task: (initialMode: CommandState.Mode?) -> Unit) {
     swingTimer?.stop()
 
     if (mode == null) mode = currentMode
 
     // Default delay - 100 ms
     val timer = Timer(OptionsManager.visualEnterDelay.value()) {
-      if (mode?.hasVisualSelection == true || editorHasSelection) {
-        task()
-      }
+      task(mode)
       swingTimer = null
       mode = null
     }

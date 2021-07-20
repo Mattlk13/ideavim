@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@ import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
 import com.maddyhome.idea.vim.option.KeyModelOptionData
 import com.maddyhome.idea.vim.option.OptionsManager
 import com.maddyhome.idea.vim.option.SelectModeOptionData
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimOptionDefaultAll
 import org.jetbrains.plugins.ideavim.VimOptionTestCase
 import org.jetbrains.plugins.ideavim.VimOptionTestConfiguration
@@ -32,9 +34,10 @@ import org.jetbrains.plugins.ideavim.VimTestOption
 import org.jetbrains.plugins.ideavim.VimTestOptionType
 
 class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, SelectModeOptionData.name) {
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionDefaultAll
   fun `test simple home`() {
-    val keys = parseKeys("<S-Home>")
+    val keys = listOf("<S-Home>")
     val before = """
             A Discovery
 
@@ -42,7 +45,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -50,7 +53,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
@@ -59,12 +62,13 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
     assertTrue(KeyModelOptionData.continueselect in OptionsManager.keymodel)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
     VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, [KeyModelOptionData.startsel]),
     VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [])
   )
   fun `test start visual`() {
-    val keys = parseKeys("<S-Home>")
+    val keys = listOf("<S-Home>")
     val before = """
             A Discovery
 
@@ -72,7 +76,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -80,17 +84,17 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.VISUAL, CommandState.SubMode.VISUAL_CHARACTER)
   }
 
-
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
     VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, [KeyModelOptionData.startsel]),
     VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [SelectModeOptionData.key])
   )
   fun `test start select`() {
-    val keys = parseKeys("<S-Home>")
+    val keys = listOf("<S-Home>")
     val before = """
             A Discovery
 
@@ -98,7 +102,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -106,7 +110,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.SELECT, CommandState.SubMode.VISUAL_CHARACTER)
   }
 
@@ -114,6 +118,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
     VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, []),
     VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [])
   )
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
   fun `test continue visual`() {
     val before = """
             A Discovery
@@ -122,7 +127,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -130,12 +135,12 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     configureByText(before)
     typeText(parseKeys("<S-Home>"))
     assertState(CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
     typeText(parseKeys("\$v", "<S-Home>"))
-    myFixture.checkResult(after)
+    assertState(after)
     assertState(CommandState.Mode.VISUAL, CommandState.SubMode.VISUAL_CHARACTER)
   }
 
@@ -143,6 +148,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
     VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, []),
     VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [])
   )
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
   fun `test continue select`() {
     val before = """
             A Discovery
@@ -151,7 +157,7 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -159,12 +165,12 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     configureByText(before)
     typeText(parseKeys("<S-Home>"))
     assertState(CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
     typeText(parseKeys("\$gh", "<S-Home>"))
-    myFixture.checkResult(after)
+    assertState(after)
     assertState(CommandState.Mode.SELECT, CommandState.SubMode.VISUAL_CHARACTER)
   }
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2019 The IdeaVim authors
+ * Copyright (C) 2003-2021 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,12 +22,20 @@ package org.jetbrains.plugins.ideavim.action.change.delete
 
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
-import org.jetbrains.plugins.ideavim.VimTestCase
+import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.option.VirtualEditData
+import org.jetbrains.plugins.ideavim.SkipNeovimReason
+import org.jetbrains.plugins.ideavim.TestWithoutNeovim
+import org.jetbrains.plugins.ideavim.VimOptionDefaultAll
+import org.jetbrains.plugins.ideavim.VimOptionTestCase
+import org.jetbrains.plugins.ideavim.VimOptionTestConfiguration
+import org.jetbrains.plugins.ideavim.VimTestOption
+import org.jetbrains.plugins.ideavim.VimTestOptionType
 
-class DeleteVisualLinesEndActionTest : VimTestCase() {
+class DeleteVisualLinesEndActionTest : VimOptionTestCase(VirtualEditData.name) {
+  @VimOptionDefaultAll
   fun `test simple deletion`() {
-    val keys = parseKeys("v", "D")
+    val keys = listOf("v", "D")
     val before = """
             A Discovery
 
@@ -35,26 +43,77 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             ${c}all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
-  @VimBehaviorDiffers(originalVimAfter = """
-            A Discovery
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
+  @VimOptionTestConfiguration(VimTestOption(VirtualEditData.name, VimTestOptionType.VALUE, [VirtualEditData.onemore]))
+  fun `test virtual edit delete middle to end`() {
+    doTest(
+      "D",
+      """
+            Yesterday it w${c}orked
+            Today it is not working
+            The test is like that.
+      """.trimIndent(),
+      """
+            Yesterday it w${c}
+            Today it is not working
+            The test is like that.
+      """.trimIndent(),
+      CommandState.Mode.COMMAND, CommandState.SubMode.NONE
+    )
+  }
 
-                ${c}all rocks and lavender and tufted grass,
-            where it was settled on some sodden sand
-            hard by the torrent of a mountain pass.
-    """)
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
+  @VimOptionTestConfiguration(VimTestOption(VirtualEditData.name, VimTestOptionType.VALUE, [VirtualEditData.onemore]))
+  fun `test virtual edit delete end to end`() {
+    doTest(
+      "D",
+      """
+            Yesterday it worke${c}d
+            Today it is not working
+            The test is like that.
+      """.trimIndent(),
+      """
+            Yesterday it worke${c}
+            Today it is not working
+            The test is like that.
+      """.trimIndent(),
+      CommandState.Mode.COMMAND, CommandState.SubMode.NONE
+    )
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
+  @VimOptionTestConfiguration(VimTestOption(VirtualEditData.name, VimTestOptionType.VALUE, [VirtualEditData.onemore]))
+  fun `test virtual edit delete to end from virtual space`() {
+    doTest(
+      "D",
+      """
+            Yesterday it worked${c}
+            Today it is not working
+            The test is like that.
+      """.trimIndent(),
+      """
+            Yesterday it worke${c}
+            Today it is not working
+            The test is like that.
+      """.trimIndent(),
+      CommandState.Mode.COMMAND, CommandState.SubMode.NONE
+    )
+  }
+
+  @VimOptionDefaultAll
   fun `test simple deletion with indent`() {
-    val keys = parseKeys("v", "D")
+    val keys = listOf("v", "D")
     val before = """
             A Discovery
 
@@ -62,19 +121,43 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
-            ${c}    all rocks and lavender and tufted grass,
+                ${c}all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test simple deletion with indent and nostartofline`() {
+    OptionsManager.startofline.reset()
+    val keys = listOf("v", "D")
+    val before = """
+            A Discovery
+
+            I ${c}found it in a legendary land
+                all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    val after = """
+            A Discovery
+
+              ${c}  all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
+  }
+
+  @VimOptionDefaultAll
   fun `test simple deletion empty line`() {
-    val keys = parseKeys("v", "D")
+    val keys = listOf("v", "D")
     val before = """
             A Discovery
             ${c}
@@ -82,27 +165,20 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
             ${c}I found it in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
-  @VimBehaviorDiffers("""
-            A Discovery
-
-            I found it in a legendary land
-            all rocks and lavender and tufted grass,
-            where it was settled on some sodden sand
-            ${c}
-    """)
+  @VimOptionDefaultAll
   fun `test simple deletion last line`() {
-    val keys = parseKeys("v", "D")
+    val keys = listOf("v", "D")
     val before = """
             A Discovery
 
@@ -111,20 +187,21 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             where it was settled on some sodden sand
             hard by the ${c}torrent of a mountain pass.
 
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
-            where it was settled on some sodden san${c}d
-
-        """.trimIndent()
+            where it was settled on some sodden sand
+            ${c}
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test simple deletion first line`() {
-    val keys = parseKeys("v", "D")
+    val keys = listOf("v", "D")
     val before = """
             A ${c}Discovery
 
@@ -132,19 +209,20 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             ${c}
             I found it in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test simple deletion before empty`() {
-    val keys = parseKeys("v", "D")
+    val keys = listOf("v", "D")
     val before = """
             A Discovery
 
@@ -153,7 +231,7 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
 
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -161,39 +239,34 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             ${c}
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
-  @VimBehaviorDiffers("""
-            A Discovery
-
-            I found it in a legendary land
-            all rocks and lavender and tufted grass,
-            ${c}where it was settled on some sodden sand"""
-  )
+  @VimOptionDefaultAll
   fun `test simple deletion last line without empty line`() {
-    val keys = parseKeys("v", "D")
+    val keys = listOf("v", "D")
     val before = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
-            hard by the ${c}torrent of a mountain pass.""".trimIndent()
+            hard by the ${c}torrent of a mountain pass.
+    """.trimIndent()
     val after = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
-            where it was settled on some sodden san${c}d
-
-            """.trimIndent()
+            ${c}where it was settled on some sodden sand
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test simple deletion multiline`() {
-    val keys = parseKeys("vj", "D")
+    val keys = listOf("vj", "D")
     val before = """
             A Discovery
 
@@ -201,18 +274,19 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             ${c}where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test simple deletion multiline motion up`() {
-    val keys = parseKeys("vk", "D")
+    val keys = listOf("vk", "D")
     val before = """
             A Discovery
 
@@ -220,18 +294,21 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all ${c}rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             ${c}where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
   fun `test delete visual lines end action`() {
-    typeTextInFile(parseKeys("v", "2j", "D"),
+    typeTextInFile(
+      parseKeys("v", "2j", "D"),
       """
                     a${c}bcde
                     abcde
@@ -241,12 +318,14 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
                     abcde
                     abcde
 
-                    """.trimIndent())
-    myFixture.checkResult("${c}abcd${c}e\n")
+      """.trimIndent()
+    )
+    assertState("${c}abcde\n${c}")
   }
 
+  @VimOptionDefaultAll
   fun `test line simple deletion`() {
-    val keys = parseKeys("V", "D")
+    val keys = listOf("V", "D")
     val before = """
             A Discovery
 
@@ -254,26 +333,20 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             ${c}all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
-  @VimBehaviorDiffers(originalVimAfter = """
-            A Discovery
-
-                ${c}all rocks and lavender and tufted grass,
-            where it was settled on some sodden sand
-            hard by the torrent of a mountain pass.
-    """)
+  @VimOptionDefaultAll
   fun `test line deletion with indent`() {
-    val keys = parseKeys("V", "D")
+    val keys = listOf("V", "D")
     val before = """
             A Discovery
 
@@ -281,19 +354,43 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
                 all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
-            ${c}    all rocks and lavender and tufted grass,
+                ${c}all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test line deletion with indent and nostartofline`() {
+    OptionsManager.startofline.reset()
+    val keys = listOf("V", "D")
+    val before = """
+            A Discovery
+
+            I ${c}found it in a legendary land
+                all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    val after = """
+            A Discovery
+
+              ${c}  all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
+  }
+
+  @VimOptionDefaultAll
   fun `test line deletion empty line`() {
-    val keys = parseKeys("V", "D")
+    val keys = listOf("V", "D")
     val before = """
             A Discovery
             ${c}
@@ -301,27 +398,20 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
             ${c}I found it in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
-  @VimBehaviorDiffers("""
-            A Discovery
-
-            I found it in a legendary land
-            all rocks and lavender and tufted grass,
-            where it was settled on some sodden sand
-            ${c}
-    """)
+  @VimOptionDefaultAll
   fun `test line deletion last line`() {
-    val keys = parseKeys("V", "D")
+    val keys = listOf("V", "D")
     val before = """
             A Discovery
 
@@ -330,47 +420,42 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             where it was settled on some sodden sand
             hard by the ${c}torrent of a mountain pass.
 
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
-            where it was settled on some sodden san${c}d
-
-        """.trimIndent()
+            where it was settled on some sodden sand
+            ${c}
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
-  @VimBehaviorDiffers("""
-            A Discovery
-
-            I found it in a legendary land
-            all rocks and lavender and tufted grass,
-            ${c}where it was settled on some sodden sand"""
-  )
+  @VimOptionDefaultAll
   fun `test line deletion last line without empty line`() {
-    val keys = parseKeys("V", "D")
+    val keys = listOf("V", "D")
     val before = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
-            hard by the ${c}torrent of a mountain pass.""".trimIndent()
+            hard by the ${c}torrent of a mountain pass.
+    """.trimIndent()
     val after = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
-            where it was settled on some sodden sand
-
-            """.trimIndent()
+            ${c}where it was settled on some sodden sand
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test line deletion multiline`() {
-    val keys = parseKeys("Vj", "D")
+    val keys = listOf("Vj", "D")
     val before = """
             A Discovery
 
@@ -378,18 +463,19 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             ${c}where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test line deletion multiline motion up`() {
-    val keys = parseKeys("Vk", "D")
+    val keys = listOf("Vk", "D")
     val before = """
             A Discovery
 
@@ -397,18 +483,21 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all ${c}rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
             ${c}where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(SkipNeovimReason.OPTION)
   fun `test line delete visual lines end action`() {
-    typeTextInFile(parseKeys("V", "2j", "D"),
+    typeTextInFile(
+      parseKeys("V", "2j", "D"),
       """
                     a${c}bcde
                     abcde
@@ -418,12 +507,14 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
                     abcde
                     abcde
 
-                    """.trimIndent())
-    myFixture.checkResult("${c}abcd${c}e\n")
+      """.trimIndent()
+    )
+    assertState("${c}abcde\n${c}")
   }
 
+  @VimOptionDefaultAll
   fun `test block simple deletion`() {
-    val keys = parseKeys("<C-V>", "D")
+    val keys = listOf("<C-V>", "D")
     val before = """
             A Discovery
 
@@ -431,7 +522,7 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -439,12 +530,13 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test block deletion empty line`() {
-    val keys = parseKeys("<C-V>", "D")
+    val keys = listOf("<C-V>", "D")
     val before = """
             A Discovery
             ${c}
@@ -452,7 +544,7 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
             ${c}
@@ -460,12 +552,13 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test block deletion last line`() {
-    val keys = parseKeys("<C-V>", "D")
+    val keys = listOf("<C-V>", "D")
     val before = """
             A Discovery
 
@@ -474,7 +567,7 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             where it was settled on some sodden sand
             hard by the${c} torrent of a mountain pass.
 
-        """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -483,31 +576,35 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             where it was settled on some sodden sand
             hard by the
 
-        """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test block deletion last line without empty line`() {
-    val keys = parseKeys("<C-V>", "D")
+    val keys = listOf("<C-V>", "D")
     val before = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
-            hard by the${c} torrent of a mountain pass.""".trimIndent()
+            hard by the${c} torrent of a mountain pass.
+    """.trimIndent()
     val after = """
             A Discovery
 
             I found it in a legendary land
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
-            hard by the""".trimIndent()
+            hard by the
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test block deletion multiline`() {
-    val keys = parseKeys("<C-V>j", "D")
+    val keys = listOf("<C-V>j", "D")
     val before = """
             A Discovery
 
@@ -515,7 +612,7 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -523,12 +620,13 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             a
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test block deletion multiline motion up`() {
-    val keys = parseKeys("<C-V>k", "D")
+    val keys = listOf("<C-V>k", "D")
     val before = """
             A Discovery
 
@@ -536,7 +634,7 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all${c} rocks and lavender and tufted grass,
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     val after = """
             A Discovery
 
@@ -544,12 +642,14 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
             all
             where it was settled on some sodden sand
             hard by the torrent of a mountain pass.
-            """.trimIndent()
+    """.trimIndent()
     doTest(keys, before, after, CommandState.Mode.COMMAND, CommandState.SubMode.NONE)
   }
 
+  @VimOptionDefaultAll
   fun `test delete visual block line end action`() {
-    typeTextInFile(parseKeys("<C-V>", "2j", "2l", "D"),
+    typeTextInFile(
+      parseKeys("<C-V>", "2j", "2l", "D"),
       """
                     abcde
                     a${c}bcde
@@ -557,14 +657,17 @@ class DeleteVisualLinesEndActionTest : VimTestCase() {
                     abcde
                     abcde
 
-                    """.trimIndent())
-    myFixture.checkResult(("""
+      """.trimIndent()
+    )
+    assertState(
+      """
     abcde
     ${c}a
     a
     a
     abcde
 
-    """.trimIndent()))
+      """.trimIndent()
+    )
   }
 }
