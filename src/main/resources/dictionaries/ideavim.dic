@@ -44,12 +44,17 @@ ideacopypreprocess
 ideatracetime
 swapfile
 noswapfile
+ideaglobalmode
 
 sethandler
+packadd
 
 nvim
 
 easymotion
+matchit
+textobj
+argtextobj
 
 
 nmap
@@ -130,3 +135,5 @@ tmapclear
 
 getreg
 getregtype
+
+endfunction

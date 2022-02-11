@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,7 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListPopup
 import com.intellij.openapi.updateSettings.impl.UpdateSettings
+import com.intellij.openapi.util.NlsActions
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.StatusBarWidgetFactory
@@ -45,8 +46,11 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.group.NotificationService
 import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.icons.VimIcons
-import com.maddyhome.idea.vim.option.IdeaStatusIcon
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.model.options.OptionChangeListener
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.annotations.NonNls
 import java.awt.Point
 import java.awt.event.MouseEvent
@@ -68,11 +72,19 @@ class StatusBarIconFactory : StatusBarWidgetFactory/*, LightEditCompatible*/ {
   }
 
   override fun isAvailable(project: Project): Boolean {
-    return OptionsManager.ideastatusicon.value != IdeaStatusIcon.disabled
+    val ideaStatusIconValue = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.ideastatusiconName) as VimString).value
+    return ideaStatusIconValue != OptionConstants.ideastatusicon_disabled
   }
 
   override fun createWidget(project: Project): StatusBarWidget {
-    OptionsManager.ideastatusicon.addOptionChangeListener { _, _ -> updateAll() }
+    VimPlugin.getOptionService().addListener(
+      OptionConstants.ideastatusiconName,
+      object : OptionChangeListener<VimDataType> {
+        override fun processGlobalValueChange(oldValue: VimDataType?) {
+          updateAll()
+        }
+      }
+    )
     return VimStatusBar()
   }
 
@@ -118,7 +130,8 @@ class VimStatusBar : StatusBarWidget, StatusBarWidget.IconPresentation {
   override fun getTooltipText() = STATUS_BAR_DISPLAY_NAME
 
   override fun getIcon(): Icon {
-    if (OptionsManager.ideastatusicon.value == IdeaStatusIcon.gray) return VimIcons.IDEAVIM_DISABLED
+    val ideaStatusIconValue = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.ideastatusiconName) as VimString).value
+    if (ideaStatusIconValue == OptionConstants.ideastatusicon_gray) return VimIcons.IDEAVIM_DISABLED
     return if (VimPlugin.isEnabled()) VimIcons.IDEAVIM else VimIcons.IDEAVIM_DISABLED
   }
 
@@ -214,9 +227,7 @@ private object VimActionsPopup {
 }
 
 private class HelpLink(
-  // [VERSION UPDATE] 203+ uncomment
-  /*@ActionText*/
-  name: String,
+  @NlsActions.ActionText name: String,
   val link: String,
   icon: Icon?,
 ) : DumbAwareAction(name, null, icon)/*, LightEditCompatible*/ {

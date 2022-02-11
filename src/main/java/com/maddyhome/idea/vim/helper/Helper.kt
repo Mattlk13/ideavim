@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,9 +26,11 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.common.TextRange
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import java.util.*
 
 /**
@@ -77,6 +79,7 @@ inline fun <reified T : Enum<T>> enumSetOf(vararg value: T): EnumSet<T> = when (
   else -> EnumSet.of(value[0], *value.slice(1..value.lastIndex).toTypedArray())
 }
 
+// TODO Should be replaced with VimEditor.carets()
 inline fun Editor.vimForEachCaret(action: (caret: Caret) -> Unit) {
   if (this.inBlockSubMode) {
     action(this.caretModel.primaryCaret)
@@ -119,7 +122,8 @@ private var editorClientKey: Key<*>? = null
 @Suppress("IncorrectParentDisposable")
 fun Editor.isTemplateActive(): Boolean {
   val project = this.project ?: return false
-  if (Disposer.isDisposed(project)) return false
+  // XXX: I've disabled this check to find the stack trace where the project is disposed
+//  if (project.isDisposed) return false
   return TemplateManager.getInstance(project).getActiveTemplate(this) != null
 }
 
@@ -160,3 +164,15 @@ annotation class RWLockLabel {
 
 val TextRange.endOffsetInclusive
   get() = if (this.endOffset > 0 && this.endOffset > this.startOffset) this.endOffset - 1 else this.endOffset
+
+fun vimEnabled(editor: Editor?): Boolean {
+  if (!VimPlugin.isEnabled()) return false
+  if (editor != null && editor.isIdeaVimDisabledHere) return false
+  return true
+}
+
+fun vimDisabled(editor: Editor?): Boolean = !vimEnabled(editor)
+
+fun experimentalApi(): Boolean {
+  return VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.experimentalapiName)
+}

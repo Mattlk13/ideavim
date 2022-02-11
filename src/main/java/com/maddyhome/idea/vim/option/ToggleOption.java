@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,13 +18,21 @@
 
 package com.maddyhome.idea.vim.option;
 
+import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.helper.VimNlsSafe;
+import com.maddyhome.idea.vim.vimscript.model.commands.SetCommand;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * Represents a boolean option
+ * @deprecated use {@link com.maddyhome.idea.vim.vimscript.model.options.Option} instead
  */
+@Deprecated
+@ApiStatus.ScheduledForRemoval(inVersion = "1.11")
 public class ToggleOption extends Option<Boolean> {
 
   private static final @NonNls String NO_PREFIX = "no";
@@ -86,7 +94,17 @@ public class ToggleOption extends Option<Boolean> {
     if (val != old) {
       onChanged(old, val);
     }
-  }
+    // we won't use OptionService if the method was invoked during set command execution (set command will call OptionService by itself)
+    if (!SetCommand.Companion.isExecutingCommand$IdeaVIM()) {
+      try {
+        if (VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL.INSTANCE, name, name) != val) {
+          VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, new VimInt(val ? 1 : 0), name);
+        }
+      }
+      catch (Exception e) {
+      }
+    }
+}
 
   /**
    * The display value of the option [no]{name}
@@ -123,5 +141,10 @@ public class ToggleOption extends Option<Boolean> {
   @Override
   public void resetDefault() {
     value = dflt;
+    try {
+      if (VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL.INSTANCE, name, name) != dflt) {
+        VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, new VimInt(dflt ? 1 : 0), name);
+      }
+    } catch (Exception e) {}
   }
 }

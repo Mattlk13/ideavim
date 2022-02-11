@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,7 +53,7 @@ import com.maddyhome.idea.vim.option.OptionsManager;
 import com.maddyhome.idea.vim.ui.StatusBarIconFactory;
 import com.maddyhome.idea.vim.ui.VimEmulationConfigurable;
 import com.maddyhome.idea.vim.ui.ex.ExEntryPanel;
-import com.maddyhome.idea.vim.vimscript.services.FunctionStorage;
+import com.maddyhome.idea.vim.vimscript.services.*;
 import org.jdom.Element;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -224,6 +224,14 @@ public class VimPlugin implements PersistentStateComponent<Element>, Disposable 
     return ServiceManager.getService(PutGroup.class);
   }
 
+  public static @NotNull VariableService getVariableService() {
+    return ServiceManager.getService(VariableService.class);
+  }
+
+  public static @NotNull OptionService getOptionService() {
+    return ServiceManager.getService(OptionService.class);
+  }
+
   private static @NotNull NotificationService getNotifications() {
     return getNotifications(null);
   }
@@ -238,7 +246,6 @@ public class VimPlugin implements PersistentStateComponent<Element>, Disposable 
       executeIdeaVimRc();
     }
   }
-
 
   public static @NotNull PluginId getPluginId() {
     return PluginId.getId(IDEAVIM_PLUGIN_ID);
@@ -289,7 +296,7 @@ public class VimPlugin implements PersistentStateComponent<Element>, Disposable 
     if (ApplicationManager.getApplication().isUnitTestMode()) {
       getInstance().error = true;
     }
-    else if (!OptionsManager.INSTANCE.getVisualbell().isSet()) {
+    else if (!VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.visualbellName, OptionConstants.visualbellName)) {
       // Vim only allows a beep once every half second - :help 'visualbell'
       final long currentTimeMillis = System.currentTimeMillis();
       if (currentTimeMillis - lastBeepTimeMillis > 500) {
@@ -332,24 +339,50 @@ public class VimPlugin implements PersistentStateComponent<Element>, Disposable 
     return ServiceManager.getService(VimPlugin.class);
   }
 
+  /**
+   * IdeaVim plugin initialization.
+   * This is an important operation and some commands ordering should be preserved.
+   * Please make sure that the documentation of this function is in sync with the code
+   *
+   * 1) Update state
+   *    This schedules a state update. In most cases it just shows some dialogs to the user. As I know, there are
+   *      no special reasons to keep this command as a first line, so it seems safe to move it.
+   * 2) Command registration
+   *    This block should be located BEFORE ~/.ideavimrc execution. Without it the commands won't be registered
+   *      and initialized, but ~/.ideavimrc file may refer or execute some commands or functions.
+   *    This block DOES NOT initialize extensions, but only registers the available ones.
+   * 3) ~/.ideavimrc execution
+   *    3.1 executes commands from the .ideavimrc file and 3.2 initializes extensions.
+   *    3.1 MUST BE BEFORE 3.2. This is a flow of vim/IdeaVim initialization, firstly .ideavimrc is executed and then
+   *      the extensions are initialized.
+   * 4) Components initialization
+   *    This should happen after ideavimrc execution because VimListenerManager accesses `number` option
+   *      to init line numbers and guicaret to initialize carets.
+   *    However, there is a question about listeners attaching. Listeners registration happens after the .ideavimrc
+   *      execution, what theoretically may cause bugs (e.g. VIM-2540)
+   */
   private void turnOnPlugin() {
+    // 1) Update state
     ApplicationManager.getApplication().invokeLater(this::updateState);
 
-    // Register vim actions in command mode
+    // 2) Command registration
+    // 2.1) Register vim actions in command mode
     RegisterActions.registerActions();
 
-    // Register extensions
+    // 2.2) Register extensions
     VimExtensionRegistrar.registerExtensions();
 
-    // Register functions
+    // 2.3) Register functions
     FunctionStorage.INSTANCE.registerHandlers();
 
-    // Execute ~/.ideavimrc
+    // 3) ~/.ideavimrc execution
+    // 3.1) Execute ~/.ideavimrc
     registerIdeavimrc();
 
-    // Initialize extensions
+    // 3.2) Initialize extensions. Always after 3.1
     VimExtensionRegistrar.enableDelayedExtensions();
 
+    // 4) Components initialization
     // Some options' default values are based on values set in .ideavimrc, e.g. 'shellxquote' on Windows when 'shell'
     // is cmd.exe has a different default to when 'shell' contains "sh"
     OptionsManager.INSTANCE.completeInitialisation();

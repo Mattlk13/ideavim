@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ class MacroWithEditingTest : VimTestCase() {
     typeTextInFile(parseKeys("qa", "iHello<Esc>", "q"), "")
     setText("")
     typeText(parseKeys("\"ap"))
-    assertState("iHello<Esc>")
+    assertState("iHello" + 27.toChar())
   }
 
   fun `test copy and perform macro`() {

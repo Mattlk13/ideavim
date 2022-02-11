@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.SearchHelper
+import com.maddyhome.idea.vim.newapi.vim
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import javax.swing.Action
@@ -121,7 +122,7 @@ class CompleteEntryAction : TextAction(ExEditorKit.CompleteEntry) {
     //   write action
     // * The key handler routines get the chance to clean up and reset state
     val entry = ExEntryPanel.getInstance().entry
-    KeyHandler.getInstance().handleKey(entry.editor, stroke, entry.context)
+    KeyHandler.getInstance().handleKey(entry.editor, stroke, entry.context.vim)
   }
 
   companion object {

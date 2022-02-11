@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,16 +20,17 @@ package com.maddyhome.idea.vim.handler
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
-import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.command.Command
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.group.MotionGroup
+import com.maddyhome.idea.vim.helper.ActionExecutor
 
 /**
  * Base class for Vim commands handled by existing IDE actions.
  */
 abstract class IdeActionHandler(private val actionName: String) : VimActionHandler.SingleExecution() {
-  override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
-    KeyHandler.executeAction(actionName, context)
+  override fun execute(editor: Editor, context: DataContext, cmd: Command, operatorArguments: OperatorArguments): Boolean {
+    ActionExecutor.executeAction(actionName, context)
     MotionGroup.scrollCaretIntoView(editor)
     return true
   }

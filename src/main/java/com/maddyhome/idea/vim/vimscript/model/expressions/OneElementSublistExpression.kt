@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,33 +21,32 @@ package com.maddyhome.idea.vim.vimscript.model.expressions
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.ex.ExException
-import com.maddyhome.idea.vim.vimscript.model.Executable
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDictionary
-import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimList
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
 
 data class OneElementSublistExpression(val index: Expression, val expression: Expression) : Expression() {
 
-  override fun evaluate(editor: Editor, context: DataContext, parent: Executable): VimDataType {
-    val expressionValue = expression.evaluate(editor, context, parent)
+  override fun evaluate(editor: Editor, context: DataContext, vimContext: VimLContext): VimDataType {
+    val expressionValue = expression.evaluate(editor, context, vimContext)
     if (expressionValue is VimDictionary) {
-      return expressionValue.dictionary[VimString(index.evaluate(editor, context, parent).asString())]
+      return expressionValue.dictionary[VimString(index.evaluate(editor, context, vimContext).asString())]
         ?: throw ExException(
           "E716: Key not present in Dictionary: \"${
-          index.evaluate(editor, context, parent).asString()
+          index.evaluate(editor, context, vimContext).asString()
           }\""
         )
     } else {
-      val indexValue = Integer.parseInt(index.evaluate(editor, context, parent).asString())
+      val indexValue = Integer.parseInt(index.evaluate(editor, context, vimContext).asString())
       if (expressionValue is VimList && (indexValue >= expressionValue.values.size || indexValue < 0)) {
         throw ExException("E684: list index out of range: $indexValue")
       }
       if (indexValue < 0) {
         return VimString("")
       }
-      return SublistExpression(SimpleExpression(VimInt(indexValue)), SimpleExpression(VimInt(indexValue)), SimpleExpression(expressionValue)).evaluate(editor, context, parent)
+      return SublistExpression(SimpleExpression(indexValue), SimpleExpression(indexValue), SimpleExpression(expressionValue)).evaluate(editor, context, vimContext)
     }
   }
 }

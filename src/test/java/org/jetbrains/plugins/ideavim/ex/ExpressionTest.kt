@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,13 +20,14 @@ package org.jetbrains.plugins.ideavim.ex
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.textarea.TextComponentEditorImpl
-import com.maddyhome.idea.vim.vimscript.model.Script
+import com.maddyhome.idea.vim.vimscript.model.CommandLineVimLContext
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression
 import javax.swing.JTextArea
 
-fun Expression.evaluate(): VimDataType {
+fun Expression.evaluate(vimContext: VimLContext = CommandLineVimLContext): VimDataType {
   val editor = TextComponentEditorImpl(null, JTextArea())
   val context = DataContext.EMPTY_CONTEXT
-  return this.evaluate(editor, context, Script(listOf()))
+  return this.evaluate(editor, context, vimContext)
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +19,13 @@
 package com.maddyhome.idea.vim.option;
 
 import com.intellij.openapi.diagnostic.Logger;
+import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.ex.ExException;
 import com.maddyhome.idea.vim.helper.VimNlsSafe;
+import com.maddyhome.idea.vim.vimscript.model.commands.SetCommand;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -32,7 +37,10 @@ import java.util.StringTokenizer;
 
 /**
  * This is an option that accepts an arbitrary list of values
+ * @deprecated use {@link com.maddyhome.idea.vim.vimscript.model.options.Option} instead
  */
+@Deprecated
+@ApiStatus.ScheduledForRemoval(inVersion = "1.11")
 public abstract class ListOption<T> extends TextOption {
   private static final Logger logger = Logger.getInstance(ListOption.class.getName());
 
@@ -165,7 +173,17 @@ public abstract class ListOption<T> extends TextOption {
     String oldValue = getValue();
     this.value = vals;
     onChanged(oldValue, getValue());
-
+    // we won't use OptionService if the method was invoked during set command execution (set command will call OptionService by itself)
+    if (!SetCommand.Companion.isExecutingCommand$IdeaVIM()) {
+      try {
+        String joinedValue = getValue();
+        if (!((VimString)VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, name)).getValue().equals(joinedValue)) {
+          VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, new VimString(joinedValue), name);
+        }
+      }
+      catch (Exception e) {
+      }
+    }
     return true;
   }
 
@@ -178,6 +196,13 @@ public abstract class ListOption<T> extends TextOption {
     value.removeAll(vals);
     value.addAll(vals);
     onChanged(oldValue, getValue());
+    try {
+    String joinedValue = getValue();
+    if (!((VimString)VimPlugin.getOptionService()
+      .getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, name)).getValue().equals(joinedValue)) {
+      VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, new VimString(joinedValue), name);
+    }
+    } catch (Exception e) {}
 
     return true;
   }
@@ -191,6 +216,13 @@ public abstract class ListOption<T> extends TextOption {
     value.removeAll(vals);
     value.addAll(0, vals);
     onChanged(oldValue, getValue());
+    try {
+    String joinedValue = getValue();
+    if (!((VimString)VimPlugin.getOptionService()
+      .getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, name)).getValue().equals(joinedValue)) {
+      VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, new VimString(joinedValue), name);
+    }
+    } catch (Exception e) {}
 
     return true;
   }
@@ -203,6 +235,13 @@ public abstract class ListOption<T> extends TextOption {
     String oldValue = getValue();
     value.removeAll(vals);
     onChanged(oldValue, getValue());
+    try {
+    String joinedValue = getValue();
+    if (!((VimString)VimPlugin.getOptionService()
+      .getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, name)).getValue().equals(joinedValue)) {
+      VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, new VimString(joinedValue), name);
+    }
+    } catch (Exception e) {}
 
     return true;
   }
@@ -254,6 +293,13 @@ public abstract class ListOption<T> extends TextOption {
       String oldValue = getValue();
       value = new ArrayList<>(defaultValues);
       onChanged(oldValue, getValue());
+      try {
+      String joinedValue = getValue();
+      if (!((VimString)VimPlugin.getOptionService()
+        .getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, name)).getValue().equals(joinedValue)) {
+        VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, name, new VimString(joinedValue), name);
+      }
+      } catch (Exception e) {}
     }
   }
 }

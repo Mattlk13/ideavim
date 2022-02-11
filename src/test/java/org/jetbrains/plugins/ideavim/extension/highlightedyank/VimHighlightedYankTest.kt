@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,8 +71,8 @@ class VimHighlightedYankTest : VimTestCase() {
     typeText(StringHelper.parseKeys("yy"))
 
     assertEquals(
-      VimPlugin.getMessage(),
-      "highlightedyank: Invalid value of g:highlightedyank_highlight_duration -- For input string: \"500.15\""
+      "highlightedyank: Invalid value of g:highlightedyank_highlight_duration -- For input string: \"500.15\"",
+      VimPlugin.getMessage()
     )
   }
 

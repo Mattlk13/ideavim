@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +19,17 @@ package com.maddyhome.idea.vim.option
 
 import com.maddyhome.idea.vim.ex.ExException
 import com.maddyhome.idea.vim.helper.enumSetOf
-import java.util.*
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorAttributes
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorEntry
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorMode
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorType
+import org.jetbrains.annotations.ApiStatus
 
+/**
+ * @deprecated use {@link com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorOptionHelper} instead
+ */
+@Deprecated("options are now replaced by helper classes")
+@ApiStatus.ScheduledForRemoval(inVersion = "1.11")
 class GuiCursorOption(name: String, abbrev: String, defaultValue: String) :
   ListOption<GuiCursorEntry>(name, abbrev, defaultValue) {
 
@@ -79,7 +88,7 @@ class GuiCursorOption(name: String, abbrev: String, defaultValue: String) :
       }
     }
 
-    return GuiCursorEntry(token, modes, GuiCursorAttributes(type, thickness, highlightGroup, lmapHighlightGroup, blinkModes))
+    return GuiCursorEntry(token, modes, type, thickness, highlightGroup, lmapHighlightGroup, blinkModes)
   }
 
   override fun onChanged(oldValue: String?, newValue: String?) {
@@ -94,18 +103,22 @@ class GuiCursorOption(name: String, abbrev: String, defaultValue: String) :
       var highlightGroup = ""
       var lmapHighlightGroup = ""
       var blinkModes = emptyList<String>()
-      values().forEach { state ->
-        if (state.modes.contains(mode) || state.modes.contains(GuiCursorMode.ALL)) {
-          type = state.attributes.type
-          thickness = state.attributes.thickness
-          if (state.attributes.highlightGroup.isNotEmpty()) {
-            highlightGroup = state.attributes.highlightGroup
+      values().forEach { data ->
+        if (data.modes.contains(mode) || data.modes.contains(GuiCursorMode.ALL)) {
+          if (data.type != null) {
+            type = data.type
           }
-          if (state.attributes.lmapHighlightGroup.isNotEmpty()) {
-            lmapHighlightGroup = state.attributes.lmapHighlightGroup
+          if (data.thickness != null) {
+            thickness = data.thickness
           }
-          if (state.attributes.blinkModes.isNotEmpty()) {
-            blinkModes = state.attributes.blinkModes
+          if (data.highlightGroup.isNotEmpty()) {
+            highlightGroup = data.highlightGroup
+          }
+          if (data.lmapHighlightGroup.isNotEmpty()) {
+            lmapHighlightGroup = data.lmapHighlightGroup
+          }
+          if (data.blinkModes.isNotEmpty()) {
+            blinkModes = data.blinkModes
           }
         }
       }
@@ -113,48 +126,3 @@ class GuiCursorOption(name: String, abbrev: String, defaultValue: String) :
     }
   }
 }
-
-enum class GuiCursorMode(val token: String) {
-  NORMAL("n"),
-  VISUAL("v"),
-  VISUAL_EXCLUSIVE("ve"),
-  OP_PENDING("o"),
-  INSERT("i"),
-  REPLACE("r"),
-  CMD_LINE("c"),
-  CMD_LINE_INSERT("ci"),
-  CMD_LINE_REPLACE("cr"),
-  SHOW_MATCH("sm"),
-  ALL("a");
-
-  override fun toString() = token
-
-  companion object {
-    fun fromString(s: String) = values().firstOrNull { it.token == s }
-  }
-}
-
-enum class GuiCursorType(val token: String) {
-  BLOCK("block"),
-  VER("ver"),
-  HOR("hor")
-}
-
-class GuiCursorEntry(
-  private val originalString: String,
-  val modes: EnumSet<GuiCursorMode>,
-  val attributes: GuiCursorAttributes
-) {
-  override fun toString(): String {
-    // We need to match the original string for output and remove purposes
-    return originalString
-  }
-}
-
-data class GuiCursorAttributes(
-  val type: GuiCursorType,
-  val thickness: Int,
-  val highlightGroup: String,
-  val lmapHighlightGroup: String,
-  val blinkModes: List<String>
-)

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ package com.maddyhome.idea.vim.vimscript.model.commands
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.ex.ExException
 import com.maddyhome.idea.vim.ex.ranges.Ranges
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
@@ -31,7 +32,6 @@ import com.maddyhome.idea.vim.vimscript.model.expressions.Variable
 import com.maddyhome.idea.vim.vimscript.model.functions.DefinedFunctionHandler
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionFlag
 import com.maddyhome.idea.vim.vimscript.services.FunctionStorage
-import com.maddyhome.idea.vim.vimscript.services.VariableService
 
 /**
  * see "h :call"
@@ -42,12 +42,16 @@ class CallCommand(val ranges: Ranges, val functionCall: Expression) : Command.Si
 
   override fun processCommand(editor: Editor, context: DataContext): ExecutionResult {
     if (functionCall is FunctionCallExpression) {
-      val function = FunctionStorage.getFunctionHandlerOrNull(functionCall.scope, functionCall.functionName, parent)
+      val function = FunctionStorage.getFunctionHandlerOrNull(
+        functionCall.scope,
+        functionCall.functionName.evaluate(editor, context, vimContext).value,
+        vimContext
+      )
       if (function != null) {
         if (function is DefinedFunctionHandler && function.function.flags.contains(FunctionFlag.DICT)) {
           throw ExException(
             "E725: Calling dict function without Dictionary: " +
-              ((if (functionCall.scope != null) functionCall.scope.c + ":" else "") + functionCall.functionName)
+              (functionCall.scope?.toString() ?: "") + functionCall.functionName.evaluate(editor, context, vimContext)
           )
         }
         function.ranges = ranges
@@ -55,17 +59,17 @@ class CallCommand(val ranges: Ranges, val functionCall: Expression) : Command.Si
         return ExecutionResult.Success
       }
 
-      val name = (if (functionCall.scope != null) functionCall.scope.c + ":" else "") + functionCall.functionName
-      val funcref = VariableService.getNullableVariableValue(Variable(functionCall.scope, functionCall.functionName), editor, context, parent)
+      val name = (functionCall.scope?.toString() ?: "") + functionCall.functionName.evaluate(editor, context, vimContext)
+      val funcref = VimPlugin.getVariableService().getNullableVariableValue(Variable(functionCall.scope, functionCall.functionName), editor, context, vimContext)
       if (funcref is VimFuncref) {
         funcref.handler.ranges = ranges
-        funcref.execute(name, functionCall.arguments, editor, context, parent)
+        funcref.execute(name, functionCall.arguments, editor, context, vimContext)
         return ExecutionResult.Success
       }
 
       throw ExException("E117: Unknown function: $name")
     } else if (functionCall is FuncrefCallExpression) {
-      functionCall.evaluateWithRange(ranges, editor, context, parent)
+      functionCall.evaluateWithRange(ranges, editor, context, vimContext)
       return ExecutionResult.Success
     } else {
       // todo add more exceptions

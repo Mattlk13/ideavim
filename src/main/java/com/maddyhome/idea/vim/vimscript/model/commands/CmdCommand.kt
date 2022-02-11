@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ package com.maddyhome.idea.vim.vimscript.model.commands
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.util.NlsSafe
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.common.CommandAlias
 import com.maddyhome.idea.vim.ex.ExOutputModel
@@ -27,7 +28,6 @@ import com.maddyhome.idea.vim.ex.ranges.Ranges
 import com.maddyhome.idea.vim.group.CommandGroup.Companion.BLACKLISTED_ALIASES
 import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
-import org.jetbrains.annotations.NonNls
 
 /**
  * @author Elliot Courant
@@ -40,8 +40,7 @@ data class CmdCommand(val ranges: Ranges, val argument: String) : Command.Single
   private companion object {
     const val overridePrefix = "!"
 
-    // [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-    @NonNls
+    @NlsSafe
     const val argsPrefix = "-nargs"
 
     const val anyNumberOfArguments = "*"

@@ -26,19 +26,84 @@ usual beta standards.
 ## To Be Released
 
 ### Features:
+* Add register support to let command | [VIM-749](https://youtrack.jetbrains.com/issue/VIM-749), [VIM-1783](https://youtrack.jetbrains.com/issue/VIM-1783)
+* Add tabmove command | [VIM-1164](https://youtrack.jetbrains.com/issue/VIM-1164)
+
+### Fixes:
+* [VIM-2502](https://youtrack.jetbrains.com/issue/VIM-2502) Fix the shape of new carets
+* [VIM-2499](https://youtrack.jetbrains.com/issue/VIM-2499) Fix mapping to esc
+* [VIM-2500](https://youtrack.jetbrains.com/issue/VIM-2500) Fix esc for normal mode
+* [VIM-2523](https://youtrack.jetbrains.com/issue/VIM-2523) `i` command for the folder in the project tree
+* [VIM-2471](https://youtrack.jetbrains.com/issue/VIM-2471) Multiple [{ and ]} actions
+* [VIM-2504](https://youtrack.jetbrains.com/issue/VIM-2504) Fix esc with using python notebooks
+* [VIM-2540](https://youtrack.jetbrains.com/issue/VIM-2540) Fix option listeners
+* [VIM-2548](https://youtrack.jetbrains.com/issue/VIM-2548) Fix paste
+* [VIM-2470](https://youtrack.jetbrains.com/issue/VIM-2470) Fix incorrect reset of cursor shape
+
+### Merged PRs:
+* [441](https://github.com/JetBrains/ideavim/pull/441) by [DanEEStar](https://github.com/DanEEStar): Add Matchit support for Vue.js files
+* [440](https://github.com/JetBrains/ideavim/pull/440) by [Kevin Suen](https://github.com/ksrb): Add matchit support for handlebars
+* [448](https://github.com/JetBrains/ideavim/pull/448) by [Michael Schertenleib](https://github.com/cravay): Support custom element names in vim-surround
+* [435](https://github.com/JetBrains/ideavim/pull/435) by [Piotr Mikulski](https://github.com/pmnoxx): Print stderr when running a command just like vim does
+* [449](https://github.com/JetBrains/ideavim/pull/449) by [Lonre Wang](https://github.com/lonre): Typo fix
+* [453](https://github.com/JetBrains/ideavim/pull/453) by [Matt Ellis](https://github.com/citizenmatt): fix(VIM-2470): Fix incorrect reset of cursor shape
+
+## 1.9.0, 2021-12-10
+
+### Features:
+* Make IdeaVim compatible with CodeWithMe | [VIM-2332](https://youtrack.jetbrains.com/issue/VIM-2332)
+* expression register `<C-R>=` | [VIM-521](https://youtrack.jetbrains.com/issue/VIM-521)
+
+### Fixes:
+* [VIM-2442](https://youtrack.jetbrains.com/issue/VIM-2442) Fix `!` command
+* [VIM-2255](https://youtrack.jetbrains.com/issue/VIM-2255) Fix reload icon on windows
+* [VIM-2199](https://youtrack.jetbrains.com/issue/VIM-2199) Fix autocompletion for AppCode
+* [VIM-2445](https://youtrack.jetbrains.com/issue/VIM-2445) Fix spaces in range
+* [VIM-2450](https://youtrack.jetbrains.com/issue/VIM-2450) Fix set command
+* [VIM-2451](https://youtrack.jetbrains.com/issue/VIM-2451) Fix comments
+* [VIM-2452](https://youtrack.jetbrains.com/issue/VIM-2452) Fix augroup
+* [VIM-2453](https://youtrack.jetbrains.com/issue/VIM-2453) Fix split command
+* [VIM-2397](https://youtrack.jetbrains.com/issue/VIM-2397) Fix dollar motion as an operator
+* [VIM-2432](https://youtrack.jetbrains.com/issue/VIM-2432) Fix ctrl-d and ctrl-u motions with scrolloff
+* [VIM-2462](https://youtrack.jetbrains.com/issue/VIM-2462) Reset caret shape when disabling plugin
+* [VIM-2449](https://youtrack.jetbrains.com/issue/VIM-2449) Fix `I` for one-line block selection
+* [VIM-2213](https://youtrack.jetbrains.com/issue/VIM-2213) Close VCS change popup on esc
+* [VIM-2435](https://youtrack.jetbrains.com/issue/VIM-2435) Close diff window on esc
+* [VIM-2461](https://youtrack.jetbrains.com/issue/VIM-2461) Show action id before action execution
+* [VIM-2026](https://youtrack.jetbrains.com/issue/VIM-2026) Keep global marks after restart
+* [VIM-1691](https://youtrack.jetbrains.com/issue/VIM-1691) Fix default path for `!` command
+* [VIM-2487](https://youtrack.jetbrains.com/issue/VIM-2487)
+  [VIM-2434](https://youtrack.jetbrains.com/issue/VIM-2434)
+  Fix IdeaVim in PyCharm notebooks
+
+### Merged PRs:
+* [390](https://github.com/JetBrains/ideavim/pull/390) by [chylex](https://github.com/chylex): [VIM-2255] Missing reload icon in .ideavimrc on Windows
+* [391](https://github.com/JetBrains/ideavim/pull/391) by [Matt Ellis](https://github.com/citizenmatt): fix(VIM-2432): handle scrolloff with <C-D> and <C-U>
+* [401](https://github.com/JetBrains/ideavim/pull/401) by [Matt Ellis](https://github.com/citizenmatt): Reset caret shape when disabling plugin
+* [407](https://github.com/JetBrains/ideavim/pull/407) by [eugene nizienko](https://github.com/nizienko): Video recording for ui tests
+* [418](https://github.com/JetBrains/ideavim/pull/418) by [chylex](https://github.com/chylex): Fix compile errors in unit tests on Windows
+
+## 1.8.0, 2021-10-27
+
+### Features:
 * Support `matchit.vim` extension for Ruby and XML/HTML [VIM-539](https://youtrack.jetbrains.com/issue/VIM-539) | [matchit.vim](https://github.com/chrisbra/matchit)
 * IDE-specific configuration [VIM-1573](https://youtrack.jetbrains.com/issue/VIM-1573)
 * Call command [VIM-2416](https://youtrack.jetbrains.com/issue/VIM-2416)
-
-### Merged PRs:
-* [337](https://github.com/JetBrains/ideavim/pull/337) by [Matt Ellis](https://github.com/citizenmatt): guicursor!
-* [343](https://github.com/JetBrains/ideavim/pull/343) by [Martin Yzeiri](https://github.com/myzeiri): Emulate matchit.vim
 
 ### Fixes:
 * [VIM-2417](https://youtrack.jetbrains.com/issue/VIM-2417) Fix bars in substitute command
 * [VIM-2425](https://youtrack.jetbrains.com/issue/VIM-2425) Fix reload button
 * [VIM-2422](https://youtrack.jetbrains.com/issue/VIM-2422) Fix freeze
 * [VIM-2420](https://youtrack.jetbrains.com/issue/VIM-2420) Fix freeze
+* [VIM-2359](https://youtrack.jetbrains.com/issue/VIM-2359) Fix selection with VimExchange
+* [VIM-2426](https://youtrack.jetbrains.com/issue/VIM-2426) Fix marks in commands
+* [VIM-2438](https://youtrack.jetbrains.com/issue/VIM-2438) Fix marks in commands
+* [DISCUSSION-386](https://github.com/JetBrains/ideavim/discussions/386) Fixed command with no spaces before argument
+
+### Merged PRs:
+* [337](https://github.com/JetBrains/ideavim/pull/337) by [Matt Ellis](https://github.com/citizenmatt): guicursor!
+* [343](https://github.com/JetBrains/ideavim/pull/343) by [Martin Yzeiri](https://github.com/myzeiri): Emulate matchit.vim
+* [387](https://github.com/JetBrains/ideavim/pull/387) by [Petar Guglev](https://github.com/wrightwriter): Update README.md link
 
 ## 1.7.2, 2021-09-30
 

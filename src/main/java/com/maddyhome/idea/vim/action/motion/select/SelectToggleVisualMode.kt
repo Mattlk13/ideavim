@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,9 +23,13 @@ import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandState
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.handler.VimActionHandler
 import com.maddyhome.idea.vim.helper.commandState
+import com.maddyhome.idea.vim.helper.inVisualMode
 import com.maddyhome.idea.vim.helper.moveToInlayAwareOffset
+import com.maddyhome.idea.vim.helper.pushSelectMode
+import com.maddyhome.idea.vim.helper.pushVisualMode
 
 /**
  * @author Alex Plate
@@ -35,30 +39,36 @@ class SelectToggleVisualMode : VimActionHandler.SingleExecution() {
 
   override val type: Command.Type = Command.Type.OTHER_READONLY
 
-  override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
-    val commandState = editor.commandState
-    val subMode = commandState.subMode
-    val mode = commandState.mode
-    commandState.popModes()
-    if (mode == CommandState.Mode.VISUAL) {
-      commandState.pushModes(CommandState.Mode.SELECT, subMode)
-      if (subMode != CommandState.SubMode.VISUAL_LINE) {
-        editor.caretModel.runForEachCaret {
-          if (it.offset + VimPlugin.getVisualMotion().selectionAdj == it.selectionEnd) {
-            it.moveToInlayAwareOffset(it.offset + VimPlugin.getVisualMotion().selectionAdj)
+  override fun execute(editor: Editor, context: DataContext, cmd: Command, operatorArguments: OperatorArguments): Boolean {
+    toggleMode(editor)
+    return true
+  }
+
+  companion object {
+    fun toggleMode(editor: Editor) {
+      val commandState = editor.commandState
+      val subMode = commandState.subMode
+      val mode = commandState.mode
+      commandState.popModes()
+      if (mode.inVisualMode) {
+        commandState.pushSelectMode(subMode, mode)
+        if (subMode != CommandState.SubMode.VISUAL_LINE) {
+          editor.caretModel.runForEachCaret {
+            if (it.offset + VimPlugin.getVisualMotion().selectionAdj == it.selectionEnd) {
+              it.moveToInlayAwareOffset(it.offset + VimPlugin.getVisualMotion().selectionAdj)
+            }
           }
         }
-      }
-    } else {
-      commandState.pushModes(CommandState.Mode.VISUAL, subMode)
-      if (subMode != CommandState.SubMode.VISUAL_LINE) {
-        editor.caretModel.runForEachCaret {
-          if (it.offset == it.selectionEnd && it.visualLineStart <= it.offset - VimPlugin.getVisualMotion().selectionAdj) {
-            it.moveToInlayAwareOffset(it.offset - VimPlugin.getVisualMotion().selectionAdj)
+      } else {
+        commandState.pushVisualMode(subMode, mode)
+        if (subMode != CommandState.SubMode.VISUAL_LINE) {
+          editor.caretModel.runForEachCaret {
+            if (it.offset == it.selectionEnd && it.visualLineStart <= it.offset - VimPlugin.getVisualMotion().selectionAdj) {
+              it.moveToInlayAwareOffset(it.offset - VimPlugin.getVisualMotion().selectionAdj)
+            }
           }
         }
       }
     }
-    return true
   }
 }

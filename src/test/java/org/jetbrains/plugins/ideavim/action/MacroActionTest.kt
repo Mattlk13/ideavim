@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,10 +17,13 @@
  */
 package org.jetbrains.plugins.ideavim.action
 
+import com.intellij.testFramework.PlatformTestUtil
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState.Companion.getInstance
 import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import junit.framework.TestCase
 import org.jetbrains.plugins.ideavim.VimTestCase
 import org.jetbrains.plugins.ideavim.rangeOf
@@ -112,5 +115,37 @@ class MacroActionTest : VimTestCase() {
     configureByText(content)
     typeText(parseKeys(":d<CR>", "@:", "3@@"))
     assertState("5\n")
+  }
+
+  // Broken, see the resulting text
+  fun `ignore test macro with macro`() {
+    val content = """
+            A Discovery
+
+            ${c}I found it in a legendary land
+            all rocks and lavender and tufted grass,
+            where it was settled on some sodden sand
+            hard by the torrent of a mountain pass.
+    """.trimIndent()
+    configureByText(content)
+    typeText(parseKeys("qa", "l", "q", "qb", "10@a", "q", "2@b"))
+
+    val startOffset = content.rangeOf("rocks").startOffset
+
+    waitAndAssert {
+      println(myFixture.editor.caretModel.offset)
+      println(startOffset)
+      println()
+      startOffset == myFixture.editor.caretModel.offset
+    }
+  }
+
+  fun `test macro with count`() {
+    configureByText("${c}0\n1\n2\n3\n4\n5\n")
+    typeText(parseKeys("qajq", "4@a"))
+    if (VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.ideadelaymacroName)) {
+      PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+    }
+    assertState("0\n1\n2\n3\n4\n${c}5\n")
   }
 }

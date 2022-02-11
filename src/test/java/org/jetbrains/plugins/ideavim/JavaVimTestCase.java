@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,10 +29,11 @@ import com.maddyhome.idea.vim.group.visual.VimVisualTimer;
 import com.maddyhome.idea.vim.helper.EditorDataContext;
 import com.maddyhome.idea.vim.helper.RunnableHelper;
 import com.maddyhome.idea.vim.helper.TestInputModel;
-import com.maddyhome.idea.vim.option.OptionsManager;
-import com.maddyhome.idea.vim.option.ToggleOption;
+import com.maddyhome.idea.vim.newapi.IjExecutionContext;
+import com.maddyhome.idea.vim.newapi.IjVimEditor;
 import com.maddyhome.idea.vim.ui.ex.ExEntryPanel;
-import com.maddyhome.idea.vim.vimscript.services.VariableService;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
+import com.maddyhome.idea.vim.vimscript.services.VariableServiceImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -52,9 +53,9 @@ public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
 
     Editor editor = myFixture.getEditor();
     if (editor != null) {
-      KeyHandler.getInstance().fullReset(editor);
+      KeyHandler.getInstance().fullReset(new IjVimEditor(editor));
     }
-    OptionsManager.INSTANCE.resetAllOptions();
+    VimPlugin.getOptionService().resetAllOptions();
     VimPlugin.getKey().resetKeyMappings();
     VimPlugin.clearError();
   }
@@ -62,7 +63,7 @@ public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
   @Override
   protected void tearDown() throws Exception {
     ExEntryPanel.getInstance().deactivate(false);
-    VariableService.INSTANCE.clear();
+    ((VariableServiceImpl) VimPlugin.getVariableService()).clear();
     Timer swingTimer = VimVisualTimer.INSTANCE.getSwingTimer();
     if (swingTimer != null) {
       swingTimer.stop();
@@ -72,9 +73,7 @@ public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
 
   protected void enableExtensions(@NotNull String... extensionNames) {
     for (String name : extensionNames) {
-      ToggleOption option = (ToggleOption)OptionsManager.INSTANCE.getOption(name);
-      assert option != null;
-      option.set();
+      VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL.INSTANCE, name,  name);
     }
   }
 
@@ -101,7 +100,7 @@ public abstract class JavaVimTestCase extends JavaCodeInsightFixtureTestCase {
           exEntryPanel.handleKey(key);
         }
         else {
-          keyHandler.handleKey(editor, key, dataContext);
+          keyHandler.handleKey(editor, key, new IjExecutionContext(dataContext));
         }
       }
     }, null, null);

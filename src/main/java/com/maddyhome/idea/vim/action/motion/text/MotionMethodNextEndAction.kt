@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.CommandFlags
 import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.handler.Motion
 import com.maddyhome.idea.vim.handler.MotionActionHandler
 import com.maddyhome.idea.vim.helper.enumSetOf
@@ -36,11 +37,10 @@ class MotionMethodNextEndAction : MotionActionHandler.ForEachCaret() {
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Motion {
-    val moveCaretToMethodEnd = VimPlugin.getMotion().moveCaretToMethodEnd(editor, caret, count)
+    val moveCaretToMethodEnd = VimPlugin.getMotion().moveCaretToMethodEnd(editor, caret, operatorArguments.count1)
     return if (moveCaretToMethodEnd < 0) Motion.Error else Motion.AbsoluteOffset(moveCaretToMethodEnd)
   }
 

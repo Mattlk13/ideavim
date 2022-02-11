@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,11 +17,14 @@
  */
 package org.jetbrains.plugins.ideavim
 
-import com.intellij.ide.bookmarks.Bookmark
-import com.intellij.ide.bookmarks.BookmarkManager
+import com.intellij.ide.bookmark.BookmarksManager
 import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.ide.highlighter.XmlFileType
 import com.intellij.json.JsonFileType
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.editor.Editor
@@ -41,15 +44,19 @@ import com.intellij.testFramework.UsefulTestCase
 import com.intellij.testFramework.fixtures.CodeInsightTestFixture
 import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory
 import com.intellij.testFramework.fixtures.impl.LightTempDirTestFixtureImpl
+import com.intellij.util.ThrowableRunnable
 import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
+import com.maddyhome.idea.vim.action.VimShortcutKeyAction
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.command.CommandState.SubMode
 import com.maddyhome.idea.vim.command.MappingMode
+import com.maddyhome.idea.vim.ex.ExException
 import com.maddyhome.idea.vim.ex.ExOutputModel.Companion.getInstance
 import com.maddyhome.idea.vim.group.visual.VimVisualTimer.swingTimer
 import com.maddyhome.idea.vim.helper.EditorDataContext
 import com.maddyhome.idea.vim.helper.EditorHelper
+import com.maddyhome.idea.vim.helper.GuicursorChangeListener
 import com.maddyhome.idea.vim.helper.RunnableHelper.runWriteCommand
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
 import com.maddyhome.idea.vim.helper.StringHelper.stringToKeys
@@ -64,19 +71,21 @@ import com.maddyhome.idea.vim.helper.thickness
 import com.maddyhome.idea.vim.key.MappingOwner
 import com.maddyhome.idea.vim.key.ToKeysMappingInfo
 import com.maddyhome.idea.vim.listener.SelectionVimListenerSuppressor
-import com.maddyhome.idea.vim.option.GuiCursorType
+import com.maddyhome.idea.vim.newapi.vim
 import com.maddyhome.idea.vim.option.OptionsManager
-import com.maddyhome.idea.vim.option.OptionsManager.getOption
-import com.maddyhome.idea.vim.option.OptionsManager.ideastrictmode
-import com.maddyhome.idea.vim.option.OptionsManager.resetAllOptions
-import com.maddyhome.idea.vim.option.ToggleOption
 import com.maddyhome.idea.vim.ui.ex.ExEntryPanel
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimFuncref
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorOptionHelper
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorType
 import com.maddyhome.idea.vim.vimscript.parser.errors.IdeavimErrorListener
-import com.maddyhome.idea.vim.vimscript.services.VariableService
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
+import com.maddyhome.idea.vim.vimscript.services.VariableServiceImpl
 import org.assertj.core.api.Assertions
 import org.junit.Assert
-import java.util.function.Consumer
+import java.awt.event.KeyEvent
+import java.util.*
 import javax.swing.KeyStroke
 
 /**
@@ -101,13 +110,15 @@ abstract class VimTestCase : UsefulTestCase() {
     // Note that myFixture.editor is usually null here. It's only set once configureByText has been called
     val editor = myFixture.editor
     if (editor != null) {
-      KeyHandler.getInstance().fullReset(editor)
+      KeyHandler.getInstance().fullReset(editor.vim)
     }
-    resetAllOptions()
+    VimPlugin.getOptionService().resetAllOptions()
+    OptionsManager.resetAllOptions()
     VimPlugin.getKey().resetKeyMappings()
     VimPlugin.getSearch().resetState()
     if (!VimPlugin.isEnabled()) VimPlugin.setEnabled(true)
-    ideastrictmode.set()
+    VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.ideastrictmodeName)
+    GuicursorChangeListener.processGlobalValueChange(null)
     Checks.reset()
 
     // Make sure the entry text field gets a bounds, or we won't be able to work out caret location
@@ -125,11 +136,13 @@ abstract class VimTestCase : UsefulTestCase() {
   override fun tearDown() {
     val swingTimer = swingTimer
     swingTimer?.stop()
-    val bookmarkManager = BookmarkManager.getInstance(myFixture.project)
-    bookmarkManager.validBookmarks.forEach(Consumer { bookmark: Bookmark? -> bookmarkManager.removeBookmark(bookmark!!) })
+    val bookmarksManager = BookmarksManager.getInstance(myFixture.project)
+    bookmarksManager?.bookmarks?.forEach { bookmark ->
+      bookmarksManager.remove(bookmark)
+    }
     SelectionVimListenerSuppressor.lock().use { myFixture.tearDown() }
     ExEntryPanel.getInstance().deactivate(false)
-    VariableService.clear()
+    (VimPlugin.getVariableService() as VariableServiceImpl).clear()
     VimFuncref.lambdaCounter = 0
     VimFuncref.anonymousCounter = 0
     IdeavimErrorListener.testLogger.clear()
@@ -137,6 +150,7 @@ abstract class VimTestCase : UsefulTestCase() {
     VimPlugin.getSearch().resetState()
     VimPlugin.getMark().resetAllMarks()
     VimPlugin.getChange().resetRepeat()
+    VimPlugin.getKey().savedShortcutConflicts.clear()
 
     // Tear down neovim
     NeovimTesting.tearDown(this)
@@ -146,7 +160,7 @@ abstract class VimTestCase : UsefulTestCase() {
 
   protected fun enableExtensions(vararg extensionNames: String) {
     for (name in extensionNames) {
-      (getOption(name) as ToggleOption).set()
+      VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, name)
     }
   }
 
@@ -175,6 +189,39 @@ abstract class VimTestCase : UsefulTestCase() {
   protected fun configureByXmlText(content: String) = configureByText(XmlFileType.INSTANCE, content)
   protected fun configureByJsonText(content: String) = configureByText(JsonFileType.INSTANCE, content)
 
+  protected fun configureAndGuard(content: String) {
+    val ranges = extractBrackets(content)
+    for ((start, end) in ranges) {
+      myFixture.editor.document.createGuardedBlock(start, end)
+    }
+  }
+
+  protected fun configureAndFold(content: String, placeholder: String) {
+    val ranges = extractBrackets(content)
+    myFixture.editor.foldingModel.runBatchFoldingOperation {
+      for ((start, end) in ranges) {
+        val foldRegion = myFixture.editor.foldingModel.addFoldRegion(start, end, placeholder)
+        foldRegion?.isExpanded = false
+      }
+    }
+  }
+
+  private fun extractBrackets(content: String): ArrayList<Pair<Int, Int>> {
+    var myContent = content.replace(c, "").replace(s, "").replace(se, "")
+    val ranges = ArrayList<Pair<Int, Int>>()
+    while (true) {
+      val start = myContent.indexOfFirst { it == '[' }
+      if (start < 0) break
+      myContent = myContent.removeRange(start, start + 1)
+      val end = myContent.indexOfFirst { it == ']' }
+      if (end < 0) break
+      myContent = myContent.removeRange(end, end + 1)
+      ranges.add(start to end)
+    }
+    configureByText(content.replace("[", "").replace("]", ""))
+    return ranges
+  }
+
   private fun configureByText(fileType: FileType, content: String): Editor {
     @Suppress("IdeaVimAssertState")
     myFixture.configureByText(fileType, content)
@@ -201,7 +248,7 @@ abstract class VimTestCase : UsefulTestCase() {
   protected fun configureByPages(pageCount: Int) {
     val stringBuilder = StringBuilder()
     repeat(pageCount * screenHeight) {
-      stringBuilder.appendln("I found it in a legendary land")
+      stringBuilder.appendLine("I found it in a legendary land")
     }
     configureByText(stringBuilder.toString())
   }
@@ -209,7 +256,7 @@ abstract class VimTestCase : UsefulTestCase() {
   protected fun configureByLines(lineCount: Int, line: String) {
     val stringBuilder = StringBuilder()
     repeat(lineCount - 1) {
-      stringBuilder.appendln(line)
+      stringBuilder.appendLine(line)
     }
     stringBuilder.append(line)
     configureByText(stringBuilder.toString())
@@ -230,15 +277,15 @@ abstract class VimTestCase : UsefulTestCase() {
     // Note that it is possible to request a position which would be invalid under normal Vim!
     // We disable scrolloff + scrolljump, position as requested, and reset. When resetting scrolloff, Vim will
     // recalculate the correct offsets, and that could move the top and/or caret line
-    val scrolloff = OptionsManager.scrolloff.value()
-    val scrolljump = OptionsManager.scrolljump.value()
-    OptionsManager.scrolloff.set(0)
-    OptionsManager.scrolljump.set(1)
+    val scrolloff = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolloffName) as VimInt).value
+    val scrolljump = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolljumpName) as VimInt).value
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolloffName, VimInt(0))
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolljumpName, VimInt(1))
 
     typeText(parseKeys("${scrollToLogicalLine + 1}z<CR>", "${caretLogicalLine + 1}G", "${caretLogicalColumn + 1}|"))
 
-    OptionsManager.scrolljump.set(scrolljump)
-    OptionsManager.scrolloff.set(scrolloff)
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolloffName, VimInt(scrolloff))
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolljumpName, VimInt(scrolljump))
 
     // Make sure we're where we want to be. If there are block inlays, we can't easily assert the bottom line because
     // we'd have to duplicate the scrolling logic here. Asserting top when we know height is good enough
@@ -258,7 +305,10 @@ abstract class VimTestCase : UsefulTestCase() {
     NeovimTesting.typeCommand(keys.filterNotNull().joinToString(separator = "") { toKeyNotation(it) }, this)
     val editor = myFixture.editor
     val project = myFixture.project
-    typeText(keys, editor, project)
+    when (Checks.keyHandler) {
+      Checks.KeyHandlerMethod.DIRECT_TO_VIM -> typeText(keys, editor, project)
+      Checks.KeyHandlerMethod.VIA_IDE -> typeTextViaIde(keys, editor)
+    }
     return editor
   }
 
@@ -430,8 +480,9 @@ abstract class VimTestCase : UsefulTestCase() {
   }
 
   protected fun assertCaretsVisualAttributes() {
+    if (!Checks.caretShape) return
     val editor = myFixture.editor
-    val attributes = OptionsManager.guicursor.getAttributes(editor.guicursorMode())
+    val attributes = GuiCursorOptionHelper.getAttributes(editor.guicursorMode())
     val colour = editor.colorsScheme.getColor(EditorColors.CARET_COLOR)
 
     editor.caretModel.allCarets.forEach { caret ->
@@ -496,7 +547,7 @@ abstract class VimTestCase : UsefulTestCase() {
     after: String,
     modeAfter: CommandState.Mode,
     subModeAfter: SubMode,
-    fileType: FileType
+    fileType: FileType,
   ) {
     configureByText(fileType, before)
 
@@ -514,7 +565,7 @@ abstract class VimTestCase : UsefulTestCase() {
     after: String,
     modeAfter: CommandState.Mode,
     subModeAfter: SubMode,
-    fileName: String
+    fileName: String,
   ) {
     configureByText(fileName, before)
 
@@ -526,7 +577,7 @@ abstract class VimTestCase : UsefulTestCase() {
     NeovimTesting.assertState(myFixture.editor, this)
   }
 
-  private fun performTest(keys: String, after: String, modeAfter: CommandState.Mode, subModeAfter: SubMode) {
+  protected fun performTest(keys: String, after: String, modeAfter: CommandState.Mode, subModeAfter: SubMode) {
     typeText(parseKeys(keys))
     @Suppress("IdeaVimAssertState")
     myFixture.checkResult(after)
@@ -587,6 +638,59 @@ abstract class VimTestCase : UsefulTestCase() {
     Checks.setup()
   }
 
+  protected fun assertExException(expectedErrorMessage: String, action: () -> Unit) {
+    assertThrowsX(ExException::class.java, expectedErrorMessage, action)
+  }
+
+  // [VERSION UPDATE] 211+ Use assertThrows from super
+  private fun assertThrowsX(
+    exceptionClass: Class<out Throwable?>,
+    expectedErrorMsgPart: String?,
+    runnable: ThrowableRunnable<*>,
+  ) {
+    var wasThrown = false
+    try {
+      runnable.run()
+    } catch (e: Throwable) {
+      wasThrown = true
+      if (!exceptionClass.isInstance(e)) {
+        throw AssertionError("Expected instance of: " + exceptionClass + " actual: " + e.javaClass, e)
+      }
+      if (expectedErrorMsgPart != null) {
+        assertTrue(e.message, e.message!!.contains(expectedErrorMsgPart))
+      }
+    } finally {
+      if (!wasThrown) {
+        fail("$exceptionClass must be thrown.")
+      }
+    }
+  }
+
+  private fun typeTextViaIde(keys: List<KeyStroke?>, editor: Editor) {
+    TestInputModel.getInstance(editor).setKeyStrokes(keys)
+
+    val inputModel = TestInputModel.getInstance(editor)
+    var key = inputModel.nextKeyStroke()
+    while (key != null) {
+      val keyChar = key.keyChar
+      if (keyChar != KeyEvent.CHAR_UNDEFINED) {
+        myFixture.type(keyChar)
+      } else {
+        val event =
+          KeyEvent(editor.component, KeyEvent.KEY_PRESSED, Date().time, key.modifiers, key.keyCode, key.keyChar)
+
+        val e = AnActionEvent(
+          event, EditorDataContext.init(editor), ActionPlaces.KEYBOARD_SHORTCUT, VimShortcutKeyAction.instance.templatePresentation,
+          ActionManager.getInstance(), 0
+        )
+        if (ActionUtil.lastUpdateAndCheckDumb(VimShortcutKeyAction.instance, e, true)) {
+          ActionUtil.performActionDumbAwareWithCallbacks(VimShortcutKeyAction.instance, e)
+        }
+      }
+      key = inputModel.nextKeyStroke()
+    }
+  }
+
   companion object {
     const val c = EditorTestUtil.CARET_TAG
     const val s = EditorTestUtil.SELECTION_START_TAG
@@ -602,7 +706,7 @@ abstract class VimTestCase : UsefulTestCase() {
           val inputModel = TestInputModel.getInstance(editor)
           var key = inputModel.nextKeyStroke()
           while (key != null) {
-            keyHandler.handleKey(editor, key, dataContext)
+            keyHandler.handleKey(editor, key, dataContext.vim)
             key = inputModel.nextKeyStroke()
           }
         },
@@ -641,10 +745,13 @@ abstract class VimTestCase : UsefulTestCase() {
 
     val neoVim = NeoVim()
 
+    var keyHandler = KeyHandlerMethod.VIA_IDE
+
     fun reset() {
       caretShape = true
 
       neoVim.reset()
+      keyHandler = KeyHandlerMethod.VIA_IDE
     }
 
     class NeoVim {
@@ -655,6 +762,11 @@ abstract class VimTestCase : UsefulTestCase() {
         ignoredRegisters = setOf()
         exitOnTearDown = true
       }
+    }
+
+    enum class KeyHandlerMethod {
+      VIA_IDE,
+      DIRECT_TO_VIM,
     }
   }
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,13 +30,16 @@ import com.intellij.openapi.editor.LineNumberConverter;
 import com.intellij.openapi.editor.event.CaretEvent;
 import com.intellij.openapi.editor.event.CaretListener;
 import com.intellij.openapi.editor.ex.EditorGutterComponentEx;
-import com.intellij.openapi.editor.ex.EditorSettingsExternalizable;
 import com.intellij.openapi.project.Project;
 import com.maddyhome.idea.vim.KeyHandler;
 import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.helper.*;
-import com.maddyhome.idea.vim.option.OptionChangeListener;
-import com.maddyhome.idea.vim.option.OptionsManager;
+import com.maddyhome.idea.vim.newapi.IjVimEditor;
+import com.maddyhome.idea.vim.newapi.VimEditor;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType;
+import com.maddyhome.idea.vim.vimscript.model.options.LocalOptionChangeListener;
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
 import org.jdom.Element;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NonNls;
@@ -60,7 +63,7 @@ public class EditorGroup implements PersistentStateComponent<Element> {
     @Override
     public void caretPositionChanged(@NotNull CaretEvent e) {
       final boolean requiresRepaint = e.getNewPosition().line != e.getOldPosition().line;
-      if (requiresRepaint && OptionsManager.INSTANCE.getRelativenumber().isSet()) {
+      if (requiresRepaint && VimPlugin.getOptionService().isSet(new OptionService.Scope.LOCAL(new IjVimEditor(e.getEditor())), OptionConstants.relativenumberName, OptionConstants.relativenumberName)) {
         repaintRelativeLineNumbers(e.getEditor());
       }
     }
@@ -108,8 +111,8 @@ public class EditorGroup implements PersistentStateComponent<Element> {
   }
 
   private static void updateLineNumbers(final @NotNull Editor editor) {
-    final boolean relativeNumber = OptionsManager.INSTANCE.getRelativenumber().isSet();
-    final boolean number = OptionsManager.INSTANCE.getNumber().isSet();
+    final boolean relativeNumber = VimPlugin.getOptionService().isSet(new OptionService.Scope.LOCAL(new IjVimEditor(editor)), OptionConstants.relativenumberName, OptionConstants.relativenumberName);
+    final boolean number = VimPlugin.getOptionService().isSet(new OptionService.Scope.LOCAL(new IjVimEditor(editor)), OptionConstants.numberName, OptionConstants.numberName);
 
     final boolean showBuiltinEditorLineNumbers = shouldShowBuiltinLineNumbers(editor, number, relativeNumber);
 
@@ -220,7 +223,7 @@ public class EditorGroup implements PersistentStateComponent<Element> {
         editor.getDocument().isWritable() &&
         !CommandStateHelper.inInsertMode(editor)) {
       VimPlugin.getChange().insertBeforeCursor(editor, EditorDataContext.init(editor, null));
-      KeyHandler.getInstance().reset(editor);
+      KeyHandler.getInstance().reset(new IjVimEditor(editor));
     }
     updateCaretsVisualAttributes(editor);
     editor.getSettings().setRefrainFromScrolling(REFRAIN_FROM_SCROLLING_VIM_VALUE);
@@ -230,13 +233,16 @@ public class EditorGroup implements PersistentStateComponent<Element> {
     deinitLineNumbers(editor, isReleased);
     UserDataManager.unInitializeEditor(editor);
     VimPlugin.getKey().unregisterShortcutKeys(editor);
-    editor.getSettings().setBlockCursor(EditorSettingsExternalizable.getInstance().isBlockCursor());
     editor.getSettings().setRefrainFromScrolling(isRefrainFromScrolling);
     DocumentManager.INSTANCE.removeListeners(editor.getDocument());
+    CaretVisualAttributesHelperKt.removeCaretsVisualAttributes(editor);
   }
 
   public void notifyIdeaJoin(@Nullable Project project) {
-    if (VimPlugin.getVimState().isIdeaJoinNotified() || OptionsManager.INSTANCE.getIdeajoin().isSet()) return;
+    if (VimPlugin.getVimState().isIdeaJoinNotified()
+        || VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.ideajoinName,  OptionConstants.ideajoinName)) {
+      return;
+    }
 
     VimPlugin.getVimState().setIdeaJoinNotified(true);
     VimPlugin.getNotifications(project).notifyAboutIdeaJoin();
@@ -255,7 +261,7 @@ public class EditorGroup implements PersistentStateComponent<Element> {
     readData(state);
   }
 
-  public static class NumberChangeListener implements OptionChangeListener<Boolean> {
+  public static class NumberChangeListener implements LocalOptionChangeListener<VimDataType> {
     public static NumberChangeListener INSTANCE = new NumberChangeListener();
 
     @Contract(pure = true)
@@ -263,11 +269,20 @@ public class EditorGroup implements PersistentStateComponent<Element> {
     }
 
     @Override
-    public void valueChange(Boolean oldValue, Boolean newValue) {
+    public void processGlobalValueChange(@Nullable VimDataType oldValue) {
       for (Editor editor : HelperKt.localEditors()) {
         if (UserDataManager.getVimEditorGroup(editor) && supportsVimLineNumbers(editor)) {
           updateLineNumbers(editor);
         }
+      }
+    }
+
+    @Override
+    public void processLocalValueChange(@Nullable VimDataType oldValue, @NotNull VimEditor editor) {
+      Editor ijEditor = ((IjVimEditor)editor).getEditor();
+
+      if (UserDataManager.getVimEditorGroup(ijEditor) && supportsVimLineNumbers(ijEditor)) {
+        updateLineNumbers(ijEditor);
       }
     }
   }
@@ -275,7 +290,7 @@ public class EditorGroup implements PersistentStateComponent<Element> {
   private static class RelativeLineNumberConverter implements LineNumberConverter {
     @Override
     public Integer convert(@NotNull Editor editor, int lineNumber) {
-      final boolean number = OptionsManager.INSTANCE.getNumber().isSet();
+      final boolean number = VimPlugin.getOptionService().isSet(new OptionService.Scope.LOCAL(new IjVimEditor(editor)), OptionConstants.numberName, OptionConstants.numberName);
       final int caretLine = editor.getCaretModel().getLogicalPosition().line;
 
       // lineNumber is 1 based

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.VisualPosition
+import com.intellij.openapi.util.NlsSafe
 import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
@@ -45,32 +46,28 @@ import com.maddyhome.idea.vim.helper.exitVisualMode
 import com.maddyhome.idea.vim.helper.inVisualMode
 import com.maddyhome.idea.vim.helper.updateCaretsVisualAttributes
 import com.maddyhome.idea.vim.helper.userData
-import com.maddyhome.idea.vim.option.OptionsManager
-import org.jetbrains.annotations.NonNls
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.newapi.vim
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import java.lang.Integer.min
 
-// [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-@NonNls
+@NlsSafe
 private const val NEXT_WHOLE_OCCURRENCE = "<Plug>NextWholeOccurrence"
 
-// [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-@NonNls
+@NlsSafe
 private const val NEXT_OCCURRENCE = "<Plug>NextOccurrence"
 
-// [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-@NonNls
+@NlsSafe
 private const val SKIP_OCCURRENCE = "<Plug>SkipOccurrence"
 
-// [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-@NonNls
+@NlsSafe
 private const val REMOVE_OCCURRENCE = "<Plug>RemoveOccurrence"
 
-// [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-@NonNls
+@NlsSafe
 private const val ALL_WHOLE_OCCURRENCES = "<Plug>AllWholeOccurrences"
 
-// [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-@NonNls
+@NlsSafe
 private const val ALL_OCCURRENCES = "<Plug>AllOccurrences"
 
 private var Editor.vimMultipleCursorsWholeWord: Boolean? by userData()
@@ -314,12 +311,12 @@ class VimMultipleCursorsExtension : VimExtension {
   private fun enterVisualMode(editor: Editor) {
     // We need to reset the key handler to make sure we pick up the fact that we're in visual mode
     VimPlugin.getVisualMotion().enterVisualMode(editor, CommandState.SubMode.VISUAL_CHARACTER)
-    KeyHandler.getInstance().reset(editor)
+    KeyHandler.getInstance().reset(editor.vim)
   }
 
   private fun findNextOccurrence(editor: Editor, startOffset: Int, text: String, whole: Boolean): Int {
     val searchOptions = enumSetOf(SearchOptions.WHOLE_FILE)
-    if (OptionsManager.wrapscan.isSet) {
+    if (VimPlugin.getOptionService().isSet(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.wrapscanName)) {
       searchOptions.add(SearchOptions.WRAP)
     }
 

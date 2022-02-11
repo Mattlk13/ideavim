@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,10 +24,13 @@ import com.intellij.openapi.util.Ref
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandFlags
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.group.visual.VimSelection
 import com.maddyhome.idea.vim.handler.VisualOperatorActionHandler
 import com.maddyhome.idea.vim.helper.enumSetOf
-import com.maddyhome.idea.vim.option.OptionsManager.ideajoin
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import java.util.*
 
 /**
@@ -43,9 +46,10 @@ class DeleteJoinVisualLinesSpacesAction : VisualOperatorActionHandler.SingleExec
     context: DataContext,
     cmd: Command,
     caretsAndSelections: Map<Caret, VimSelection>,
+    operatorArguments: OperatorArguments,
   ): Boolean {
     if (editor.isOneLineMode) return false
-    if (ideajoin.isSet) {
+    if (VimPlugin.getOptionService().isSet(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.ideajoinName)) {
       VimPlugin.getChange().joinViaIdeaBySelections(editor, context, caretsAndSelections)
       return true
     }

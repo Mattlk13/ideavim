@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,7 +64,7 @@ class SublistExpressionTests {
     val ex = VimscriptParser.parseExpression("var[$sp1:${sp2}32$sp3]")
     assertTrue(ex is SublistExpression)
     assertTrue(ex.expression is Variable)
-    assertEquals("var", (ex.expression as Variable).name)
+    assertEquals("var", (ex.expression as Variable).name.evaluate().asString())
     assertNull(ex.from)
     assertEquals(VimInt(32), ex.to!!.evaluate())
   }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,10 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.actionSystem.TypedAction
+import com.intellij.openapi.editor.event.CaretEvent
+import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.editor.event.EditorMouseEvent
@@ -35,8 +38,6 @@ import com.intellij.openapi.editor.ex.DocumentEx
 import com.intellij.openapi.editor.impl.EditorComponentImpl
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.ProjectManager
 import com.intellij.util.ExceptionUtil
 import com.maddyhome.idea.vim.EventFacade
 import com.maddyhome.idea.vim.KeyHandler
@@ -67,15 +68,18 @@ import com.maddyhome.idea.vim.helper.localEditors
 import com.maddyhome.idea.vim.helper.moveToInlayAwareOffset
 import com.maddyhome.idea.vim.helper.subMode
 import com.maddyhome.idea.vim.helper.updateCaretsVisualAttributes
+import com.maddyhome.idea.vim.helper.vimDisabled
 import com.maddyhome.idea.vim.helper.vimLastColumn
 import com.maddyhome.idea.vim.listener.MouseEventsDataHolder.skipEvents
 import com.maddyhome.idea.vim.listener.MouseEventsDataHolder.skipNDragEvents
 import com.maddyhome.idea.vim.listener.VimListenerManager.EditorListeners.add
 import com.maddyhome.idea.vim.listener.VimListenerManager.EditorListeners.remove
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.newapi.vim
 import com.maddyhome.idea.vim.option.StrictMode
 import com.maddyhome.idea.vim.ui.ShowCmdOptionChangeListener
 import com.maddyhome.idea.vim.ui.ex.ExEntryPanel
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.KeywordOptionChangeListener
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.SwingUtilities
@@ -90,13 +94,11 @@ object VimListenerManager {
 
   fun turnOn() {
     GlobalListeners.enable()
-    ProjectListeners.addAll()
     EditorListeners.addAll()
   }
 
   fun turnOff() {
     GlobalListeners.disable()
-    ProjectListeners.removeAll()
     EditorListeners.removeAll()
   }
 
@@ -110,41 +112,31 @@ object VimListenerManager {
         StrictMode.fail("typeAction expected to be non-vim.")
       }
 
-      OptionsManager.number.addOptionChangeListener(EditorGroup.NumberChangeListener.INSTANCE)
-      OptionsManager.relativenumber.addOptionChangeListener(EditorGroup.NumberChangeListener.INSTANCE)
-      OptionsManager.scrolloff.addOptionChangeListener(MotionGroup.ScrollOptionsChangeListener.INSTANCE)
-      OptionsManager.showcmd.addOptionChangeListener(ShowCmdOptionChangeListener)
-      OptionsManager.guicursor.addOptionChangeListener(GuicursorChangeListener)
+      VimPlugin.getOptionService().addListener(OptionConstants.numberName, EditorGroup.NumberChangeListener.INSTANCE)
+      VimPlugin.getOptionService().addListener(OptionConstants.relativenumberName, EditorGroup.NumberChangeListener.INSTANCE)
+      VimPlugin.getOptionService().addListener(OptionConstants.scrolloffName, MotionGroup.ScrollOptionsChangeListener.INSTANCE)
+      VimPlugin.getOptionService().addListener(OptionConstants.showcmdName, ShowCmdOptionChangeListener)
+      VimPlugin.getOptionService().addListener(OptionConstants.guicursorName, GuicursorChangeListener)
+      VimPlugin.getOptionService().addListener(OptionConstants.iskeywordName, KeywordOptionChangeListener, true)
 
       EventFacade.getInstance().addEditorFactoryListener(VimEditorFactoryListener, VimPlugin.getInstance())
+
+      EditorFactory.getInstance().eventMulticaster.addCaretListener(VimCaretListener, VimPlugin.getInstance())
     }
 
     fun disable() {
       EventFacade.getInstance().restoreTypedActionHandler()
 
-      OptionsManager.number.removeOptionChangeListener(EditorGroup.NumberChangeListener.INSTANCE)
-      OptionsManager.relativenumber.removeOptionChangeListener(EditorGroup.NumberChangeListener.INSTANCE)
-      OptionsManager.scrolloff.removeOptionChangeListener(MotionGroup.ScrollOptionsChangeListener.INSTANCE)
-      OptionsManager.showcmd.removeOptionChangeListener(ShowCmdOptionChangeListener)
-      OptionsManager.guicursor.removeOptionChangeListener(GuicursorChangeListener)
+      VimPlugin.getOptionService().removeListener(OptionConstants.numberName, EditorGroup.NumberChangeListener.INSTANCE)
+      VimPlugin.getOptionService().removeListener(OptionConstants.relativenumberName, EditorGroup.NumberChangeListener.INSTANCE)
+      VimPlugin.getOptionService().removeListener(OptionConstants.scrolloffName, MotionGroup.ScrollOptionsChangeListener.INSTANCE)
+      VimPlugin.getOptionService().removeListener(OptionConstants.showcmdName, ShowCmdOptionChangeListener)
+      VimPlugin.getOptionService().removeListener(OptionConstants.guicursorName, GuicursorChangeListener)
+      VimPlugin.getOptionService().removeListener(OptionConstants.iskeywordName, KeywordOptionChangeListener)
 
       EventFacade.getInstance().removeEditorFactoryListener(VimEditorFactoryListener)
-    }
-  }
 
-  object ProjectListeners {
-    fun add(project: Project) {
-      IdeaSpecifics.addIdeaSpecificsListeners(project)
-    }
-
-    fun removeAll() {
-      // Project listeners are self-disposable, so there is no need to unregister them on project close
-      ProjectManager.getInstance().openProjects.filterNot { it.isDisposed }
-        .forEach { IdeaSpecifics.removeIdeaSpecificsListeners(it) }
-    }
-
-    fun addAll() {
-      ProjectManager.getInstance().openProjects.filterNot { it.isDisposed }.forEach { add(it) }
+      EditorFactory.getInstance().eventMulticaster.removeCaretListener(VimCaretListener)
     }
   }
 
@@ -187,6 +179,18 @@ object VimListenerManager {
       VimPlugin.getEditorIfCreated()?.editorDeinit(editor, isReleased)
 
       VimPlugin.getChange().editorReleased(editor)
+    }
+  }
+
+  object VimCaretListener : CaretListener {
+    override fun caretAdded(event: CaretEvent) {
+      if (vimDisabled(event.editor)) return
+      event.editor.updateCaretsVisualAttributes()
+    }
+
+    override fun caretRemoved(event: CaretEvent) {
+      if (vimDisabled(event.editor)) return
+      event.editor.updateCaretsVisualAttributes()
     }
   }
 
@@ -342,6 +346,9 @@ object VimListenerManager {
       if (skipNDragEvents > 0) {
         logger.debug("Mouse dragging")
         VimVisualTimer.swingTimer?.stop()
+        if (!mouseDragging) {
+          SelectionVimListenerSuppressor.lock()
+        }
         mouseDragging = true
 
         val caret = e.editor.caretModel.primaryCaret
@@ -364,8 +371,8 @@ object VimListenerManager {
     override fun mousePressed(event: EditorMouseEvent) {
       if (event.editor.isIdeaVimDisabledHere) return
 
+      skipNDragEvents = skipEvents
       SelectionVimListenerSuppressor.reset()
-      SelectionVimListenerSuppressor.lock()
     }
 
     /**
@@ -431,7 +438,7 @@ object VimListenerManager {
             editor.exitVisualMode()
           } else if (editor.inSelectMode) {
             editor.exitSelectMode(false)
-            KeyHandler.getInstance().reset(editor)
+            KeyHandler.getInstance().reset(editor.vim)
           }
         }
 

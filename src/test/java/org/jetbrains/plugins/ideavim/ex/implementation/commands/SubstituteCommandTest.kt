@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,10 +18,12 @@
 
 package org.jetbrains.plugins.ideavim.ex.implementation.commands
 
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.option.IgnoreCaseOptionsData
-import com.maddyhome.idea.vim.option.OptionsManager
-import com.maddyhome.idea.vim.option.SmartCaseOptionsData
+import com.maddyhome.idea.vim.vimscript.Executor
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
+import org.jetbrains.plugins.ideavim.OptionValueType
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimOptionDefault
@@ -29,12 +31,11 @@ import org.jetbrains.plugins.ideavim.VimOptionDefaultAll
 import org.jetbrains.plugins.ideavim.VimOptionTestCase
 import org.jetbrains.plugins.ideavim.VimOptionTestConfiguration
 import org.jetbrains.plugins.ideavim.VimTestOption
-import org.jetbrains.plugins.ideavim.VimTestOptionType
 
 /**
  * @author Alex Plate
  */
-class SubstituteCommandTest : VimOptionTestCase(SmartCaseOptionsData.name, IgnoreCaseOptionsData.name) {
+class SubstituteCommandTest : VimOptionTestCase(OptionConstants.smartcaseName, OptionConstants.ignorecaseName) {
   @VimOptionDefaultAll
   @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
   fun `test one letter`() {
@@ -198,8 +199,8 @@ class SubstituteCommandTest : VimOptionTestCase(SmartCaseOptionsData.name, Ignor
     )
   }
 
-  @VimOptionTestConfiguration(VimTestOption(IgnoreCaseOptionsData.name, VimTestOptionType.TOGGLE, ["true"]))
-  @VimOptionDefault(SmartCaseOptionsData.name)
+  @VimOptionTestConfiguration(VimTestOption(OptionConstants.ignorecaseName, OptionValueType.NUMBER, "1"))
+  @VimOptionDefault(OptionConstants.smartcaseName)
   @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
   fun `test ignorecase option`() {
     doTest(
@@ -212,7 +213,7 @@ class SubstituteCommandTest : VimOptionTestCase(SmartCaseOptionsData.name, Ignor
   @VimOptionDefaultAll
   @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
   fun `test smartcase option`() {
-    OptionsManager.smartcase.set()
+    VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.smartcaseName)
 
     // smartcase does nothing if ignorecase is not set
     doTest(
@@ -226,7 +227,7 @@ class SubstituteCommandTest : VimOptionTestCase(SmartCaseOptionsData.name, Ignor
       "foo bar foo\nbar FOO foo"
     )
 
-    OptionsManager.ignorecase.set()
+    VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.ignorecaseName)
     doTest(
       "%s/foo/bar/g",
       "foo Foo foo\nFoo FOO foo",
@@ -248,14 +249,14 @@ class SubstituteCommandTest : VimOptionTestCase(SmartCaseOptionsData.name, Ignor
       "bar bar bar\nbar bar bar"
     )
 
-    OptionsManager.ignorecase.set()
+    VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.ignorecaseName)
     doTest(
       "%s/foo/bar/gi",
       "foo Foo foo\nFoo FOO foo",
       "bar bar bar\nbar bar bar"
     )
 
-    OptionsManager.smartcase.set()
+    VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.smartcaseName)
     doTest(
       "%s/foo/bar/gi",
       "foo Foo foo\nFoo FOO foo",
@@ -272,14 +273,14 @@ class SubstituteCommandTest : VimOptionTestCase(SmartCaseOptionsData.name, Ignor
       "bar Foo bar\nFoo FOO bar"
     )
 
-    OptionsManager.ignorecase.set()
+    VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.ignorecaseName)
     doTest(
       "%s/foo/bar/gI",
       "foo Foo foo\nFoo FOO foo",
       "bar Foo bar\nFoo FOO bar"
     )
 
-    OptionsManager.smartcase.set()
+    VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.smartcaseName)
     doTest(
       "%s/Foo/bar/gI",
       "foo Foo foo\nFoo FOO foo",
@@ -809,5 +810,158 @@ class SubstituteCommandTest : VimOptionTestCase(SmartCaseOptionsData.name, Ignor
 
   private fun doTest(command: String, before: String, after: String) {
     doTest(listOf(exCommand(command)), before, after)
+  }
+
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test underscore as delimiter`() {
+    doTest(
+      "s_1_2",
+      "1 + 2 = 4",
+      "2 + 2 = 4"
+    )
+  }
+
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test simple expression`() {
+    configureByText(
+      """
+      val s1 = "oh"
+      val s2 = "hi"
+      val s3 = "Mark"
+      """.trimIndent()
+    )
+    typeText(commandToKeys("%s/\\d/\\=21*2"))
+    assertState(
+      """
+      val s42 = "oh"
+      val s42 = "hi"
+      val s42 = "Mark"
+      """.trimIndent()
+    )
+  }
+
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test line-dependent expression`() {
+    configureByText(
+      """
+      0. Milk (1 l.)
+      0. Bread
+      0. Coke (2 l.)
+      """.trimIndent()
+    )
+    typeText(commandToKeys("%s/\\d\\+/\\=line('.')"))
+    assertState(
+      """
+      1. Milk (1 l.)
+      2. Bread
+      3. Coke (2 l.)
+      """.trimIndent()
+    )
+  }
+
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test substitute with submatch function`() {
+    configureByText(
+      """
+      val ch1 = tree.getChild(0)
+      ${c}val ch1 = tree.getChild(0)
+      """.trimIndent()
+    )
+    typeText(commandToKeys("s/\\d\\+/\\=submatch(0)+1/g"))
+    assertState(
+      """
+      val ch1 = tree.getChild(0)
+      val ch2 = tree.getChild(1)
+      """.trimIndent()
+    )
+  }
+
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test substitute with submatch function2`() {
+    configureByText(
+      """
+      val ch1 = tree.getChild(0)
+      val ch1 = tree.getChild(0)
+      val ch1 = tree.getChild(0)
+      val ch1 = tree.getChild(0)
+      """.trimIndent()
+    )
+    Executor.execute(
+      """
+      function! IncrementWholeLine() range|
+        execute ":" .. a:firstline .. "," .. a:lastline .. "s/\\d\\+/\\=submatch(0)+line('.')-a:firstline+1/g"|
+      endfunction
+      """.trimIndent()
+    )
+    typeText(commandToKeys("2,4call IncrementWholeLine()"))
+    assertState(
+      """
+      val ch1 = tree.getChild(0)
+      val ch2 = tree.getChild(1)
+      val ch3 = tree.getChild(2)
+      val ch4 = tree.getChild(3)
+      """.trimIndent()
+    )
+  }
+
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test exception during expression evaluation`() {
+    configureByText(
+      """
+      val str = "first"
+      16128
+      16132
+      16136
+      16140
+      val str2 = "second"
+      """.trimIndent()
+    )
+    typeText(commandToKeys("%s/\\d\\+/\\=printf('0x%04x', submatch(0))"))
+    assertPluginError(true)
+    assertPluginErrorMessageContains("E117: Unknown function: printf")
+    assertState(
+      """
+      val str = "first"
+      
+      
+      
+      
+      val str = "second"
+      """.trimIndent()
+    )
+  }
+
+  @VimOptionDefaultAll
+  @TestWithoutNeovim(reason = SkipNeovimReason.OPTION)
+  fun `test invalid expression`() {
+    configureByText(
+      """
+      val str = "first"
+      16128
+      16132
+      16136
+      16140
+      val str2 = "second"
+      """.trimIndent()
+    )
+    typeText(commandToKeys("%s/\\d\\+/\\=*&("))
+    assertPluginError(true)
+    assertPluginErrorMessageContains("E15: Invalid expression: *&(")
+    assertState(
+      """
+      val str = "first"
+      
+      
+      
+      
+      val str = "second"
+      """.trimIndent()
+    )
   }
 }

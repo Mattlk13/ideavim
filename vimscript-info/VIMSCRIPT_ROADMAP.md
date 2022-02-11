@@ -9,7 +9,6 @@
 - [x] scopes: `g:`, `s:`, `l:`, `a:`, `b:`, `w:`, `t:` (the `v:` scope is not supported yet)  
 - [x] `map <expr>`
 
-## Plans for the next releases:
 ### IdeaVim 1.8.0
 
 - [x] move `s:` scoped variables to `Script` class  
@@ -34,33 +33,40 @@
 - [x] reduce number of rules in grammar
 - [x] classic package structure  
 
-### IdeaVim 1.9.0   
+### IdeaVim 1.9.0
+- [x] support `for [a, b] in {expr}`
+- [x] pass scopes to functions e.g. `for k in keys(s:)`
+- [x] curly-braces-names
+- [x] `finish` statement
+- [x] pass Lists and Dictionaries by reference
+- [x] variable locking
+- [x] rewrite OptionManager to vim data types
+- [x] scoped options
+- [x] `normal` command
+- [x] expression register (`<C-R>=`)
 
-- [ ] classloading
-- [ ] pass scopes to functions e.g. `for k in keys(s:)`
-- [ ] support `for [a, b] in {expr}`
-- [ ] curly-braces-names
-- [ ] pass Lists and Dictionaries by reference
-- [ ] variable locking (`lock`, `unlock`, `const`)
-- [ ] rewrite OptionManager to vim data types
-- [ ] scoped options
-- [ ] `normal` command
-- [ ] `finish` statement
-- [ ] vim "special" type
-- [ ] `v:` scope
-- [ ] make `LibraryFunction` return `Result`  
+## Plans for the next releases:
+### IdeaVim 1.10.0
+- [ ] `Result` class that would store the exceptions
+- [ ] throwing multiple exceptions at once
 - [ ] exception wrapping in try/catch  
 - [ ] store exception messages in property file  
-- [ ] store vim exception stacktrace in ExException  
-- [ ] update tests to JUnit 5  
-- [ ] rethink vimscript tests  
-- [ ] loggers
+- [ ] store vim exception stacktrace  
 
-## Less important things that might be added soon  
-  
+### Pool of things that might be added soon
+- [ ] executing context (script / command line) & better parent for executable
+- [ ] classloading
 - [ ] all the let command's cases (e.g. registers)
-- [ ] expression register (`<C-R>=`)
+- [ ] vim "special" type
+- [ ] `v:` scope
+- [ ] update tests to JUnit 5
+- [ ] rethink vimscript tests
+- [ ] loggers
+- [ ] todos, warnings
+- [ ] expressions in substitute command (`\=`)
+- [ ] vim status line and beautiful exceptions output
 - [ ] improve `w:` and `t:` scopes
-- [ ] delayed parsing of if/for/while etc.
 - [ ] context dependent parsing e.g. `dict.key`
-- [ ] add `-range` option to `command` command  
+- [ ] add `-range` option to `command` command
+- [ ] better strings (e.g. `"\<Esc"`)
+

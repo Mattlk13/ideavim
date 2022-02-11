@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,6 +40,24 @@ class ChangeMotionActionTest : VimTestCase() {
       "cc",
       "foo\n" + "${c}bar\n",
       "foo\n${c}" + "\n", CommandState.Mode.INSERT, CommandState.SubMode.NONE
+    )
+  }
+
+  // VIM-296 |cc|
+  fun testChangeLineWithIndent() {
+    doTest(
+      "cc",
+      """
+        fun main {
+            ${c}bar
+        }
+      """.trimIndent(),
+      """
+        fun main {
+        ....${c}
+        }
+      """.trimIndent().dotToSpace(),
+      CommandState.Mode.INSERT, CommandState.SubMode.NONE
     )
   }
 

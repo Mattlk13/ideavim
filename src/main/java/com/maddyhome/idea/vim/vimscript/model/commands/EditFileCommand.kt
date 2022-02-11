@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,9 +21,9 @@ package com.maddyhome.idea.vim.vimscript.model.commands
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
-import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.ex.ranges.Ranges
+import com.maddyhome.idea.vim.helper.ActionExecutor
 import com.maddyhome.idea.vim.helper.EditorDataContext
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
 
@@ -48,7 +48,7 @@ data class EditFileCommand(val ranges: Ranges, val argument: String) : Command.S
 
     // Don't open a choose file dialog under a write action
     ApplicationManager.getApplication().invokeLater {
-      KeyHandler.executeAction("OpenFile", EditorDataContext.init(editor, context))
+      ActionExecutor.executeAction("OpenFile", EditorDataContext.init(editor, context))
     }
 
     return ExecutionResult.Success

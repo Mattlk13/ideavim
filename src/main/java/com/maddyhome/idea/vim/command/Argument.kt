@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,12 @@ class Argument private constructor(
     val EMPTY_COMMAND = Command(
       0,
       object : MotionActionHandler.SingleExecution() {
-        override fun getOffset(editor: Editor, context: DataContext, count: Int, rawCount: Int, argument: Argument?) =
+        override fun getOffset(
+          editor: Editor,
+          context: DataContext,
+          argument: Argument?,
+          operatorArguments: OperatorArguments
+        ) =
           Motion.NoMotion
 
         override val motionType: MotionType = MotionType.EXCLUSIVE

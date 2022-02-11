@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,6 @@ data class ExecuteCommand(val ranges: Ranges, val expressions: List<Expression>)
 
   override fun processCommand(editor: Editor, context: DataContext): ExecutionResult {
     val command = expressions.joinToString(separator = " ") { it.evaluate(editor, context, this).asString() }
-    return Executor.execute(command, editor, context, skipHistory = true, indicateErrors = true)
+    return Executor.execute(command, editor, context, skipHistory = true, indicateErrors = true, this.vimContext)
   }
 }

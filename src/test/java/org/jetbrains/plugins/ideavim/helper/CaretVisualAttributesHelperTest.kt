@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,14 +19,21 @@
 package org.jetbrains.plugins.ideavim.helper
 
 import com.intellij.openapi.editor.Caret
+import com.intellij.openapi.editor.VisualPosition
 import com.intellij.openapi.editor.ex.EditorSettingsExternalizable
+import com.maddyhome.idea.vim.VimPlugin
+import com.maddyhome.idea.vim.helper.ActionExecutor
+import com.maddyhome.idea.vim.helper.EditorDataContext
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
 import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
 import com.maddyhome.idea.vim.helper.buildGreater212
 import com.maddyhome.idea.vim.helper.getShape
 import com.maddyhome.idea.vim.helper.shape
 import com.maddyhome.idea.vim.helper.thickness
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
+import junit.framework.TestCase
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
@@ -159,7 +166,7 @@ class CaretVisualAttributesHelperTest : VimTestCase() {
 
   @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
   fun `test nested visual mode in ide gets visual caret`() {
-    OptionsManager.keymodel.set("startsel,stopsel")
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.keymodelName, VimString("startsel,stopsel"))
     configureByText("I ${c}found it in a legendary land")
     typeText(parseKeys("i", "<S-Right><S-Right><S-Right>"))
     assertCaretVisualAttributes("BLOCK", 0F)
@@ -167,7 +174,7 @@ class CaretVisualAttributesHelperTest : VimTestCase() {
 
   @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
   fun `test caret reset to insert after leaving nested visual mode`() {
-    OptionsManager.keymodel.set("startsel,stopsel")
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.keymodelName, VimString("startsel,stopsel"))
     configureByText("I ${c}found it in a legendary land")
     typeText(parseKeys("i", "<S-Right><S-Right><S-Right>", "<Right>"))
     assertCaretVisualAttributes("BAR", 0.25F)
@@ -175,7 +182,7 @@ class CaretVisualAttributesHelperTest : VimTestCase() {
 
   @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
   fun `test caret reset to insert after cancelling nested visual mode`() {
-    OptionsManager.keymodel.set("startsel,stopsel")
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.keymodelName, VimString("startsel,stopsel"))
     configureByText("I ${c}found it in a legendary land")
     typeText(parseKeys("i", "<S-Right><S-Right><S-Right>", "<Esc>"))
     assertCaretVisualAttributes("BAR", 0.25F)
@@ -210,9 +217,26 @@ class CaretVisualAttributesHelperTest : VimTestCase() {
   }
 
   @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test block used when caret shape is unspecified`() {
+    configureByText("I found it in a legendary land")
+    enterCommand("set guicursor=c:ver25")
+    assertCaretVisualAttributes("BLOCK", 0.0F)
+    typeText(parseKeys("i"))
+    assertCaretVisualAttributes("BLOCK", 0.0F)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
   fun `test 'all' guicursor option`() {
     configureByText("I found it in a legendary land")
     enterCommand("set guicursor+=a:ver25")
+    assertCaretVisualAttributes("BAR", 0.25F)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test 'all' guicursor option without cursor shape does not affect existing shapes`() {
+    configureByText("I found it in a legendary land")
+    enterCommand("set guicursor+=a:blinkwait200-blinkoff125-blinkon150-Cursor/lCursor")
+    typeText(parseKeys("i"))
     assertCaretVisualAttributes("BAR", 0.25F)
   }
 
@@ -237,6 +261,50 @@ class CaretVisualAttributesHelperTest : VimTestCase() {
     } finally {
       EditorSettingsExternalizable.getInstance().isBlockCursor = originalValue
     }
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test reset caret shape when disable plugin`() {
+    configureByText("I found it in a legendary land")
+    typeText(parseKeys("i"))
+    VimPlugin.setEnabled(false)
+    assertCaretVisualAttributes("DEFAULT", 1.0f)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test reset caret shape when disable plugin 2`() {
+    configureByText("I found it in a legendary land")
+    typeText(parseKeys("v2e"))
+    VimPlugin.setEnabled(false)
+    assertCaretVisualAttributes("DEFAULT", 1.0f)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test reset caret shape when disable plugin 3`() {
+    configureByText("I found it in a legendary land")
+    typeText(parseKeys("r"))
+    VimPlugin.setEnabled(false)
+    assertCaretVisualAttributes("DEFAULT", 1.0f)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test adding new caret via IJ`() {
+    configureByText("${c}I found it in a legendary land")
+    myFixture.editor.caretModel.addCaret(VisualPosition(0, 5))
+    assertCaretVisualAttributes("BLOCK", 0f)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test adding new caret below`() {
+    configureByText(
+      """
+      |${c}I found it in a legendary land
+      |all rocks and lavender and tufted grass,
+    """.trimMargin()
+    )
+    ActionExecutor.executeAction("EditorCloneCaretBelow", EditorDataContext.init(myFixture.editor))
+    TestCase.assertEquals(2, myFixture.editor.caretModel.caretCount)
+    assertCaretVisualAttributes("BLOCK", 0f)
   }
 
   private fun assertCaretVisualAttributes(expectedShape: String, expectedThickness: Float) {

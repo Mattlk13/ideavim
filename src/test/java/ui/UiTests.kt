@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 
 package ui
 
+import com.automation.remarks.junit.VideoRule
+import com.automation.remarks.video.annotations.Video
 import com.intellij.remoterobot.RemoteRobot
 import com.intellij.remoterobot.fixtures.ComponentFixture
 import com.intellij.remoterobot.fixtures.ContainerFixture
@@ -25,6 +27,7 @@ import com.intellij.remoterobot.search.locators.byXpath
 import com.intellij.remoterobot.stepsProcessing.step
 import com.intellij.remoterobot.utils.keyboard
 import org.assertj.swing.core.MouseButton
+import org.junit.Rule
 import org.junit.Test
 import ui.pages.Editor
 import ui.pages.IdeaFrame
@@ -57,7 +60,12 @@ class UiTests {
     StepsLogger.init()
   }
 
+  @Rule
+  @JvmField
+  var videoRule = VideoRule()
+
   @Test
+  @Video
   fun ideaVimTest() = uiTest("ideaVimTest") {
     val sharedSteps = JavaExampleSteps(this)
 
@@ -80,7 +88,6 @@ class UiTests {
           )
         }
       }
-
       testSelectTextWithDelay(editor)
       testExtendSelection(editor)
       testLargerDragSelection(editor)

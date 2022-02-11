@@ -2,15 +2,41 @@
   <name>IdeaVim</name>
   <id>IdeaVIM</id>
   <change-notes><![CDATA[
+      <h3>Features:</h3>
+      <ul>
+        <li>Add register support to let command | <a href="https://youtrack.jetbrains.com/issue/VIM-749">VIM-749</a>, <a
+            href="https://youtrack.jetbrains.com/issue/VIM-1783">VIM-1783</a></li>
+      </ul>
+
       <h3>Fixes:</h3>
       <ul>
-        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2405">VIM-2405</a> ExExceptions during <code>map
-          &lt;expr&gt;</code> execution are now displayed in status bar
+        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2502">VIM-2502</a> Fix the shape of new carets</li>
+        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2499">VIM-2499</a> Fix mapping to esc</li>
+        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2500">VIM-2500</a> Fix esc for normal mode</li>
+        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2523">VIM-2523</a> <code>i</code> command for the folder in the
+          project tree
         </li>
-        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2406">VIM-2406</a> Fix go to line command</li>
-        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2408">VIM-2408</a> Fix vim script parser</li>
-        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2409">VIM-2409</a> Fix substitute command</li>
-        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2411">VIM-2411</a> Fix vim script parser</li>
+        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2471">VIM-2471</a> Multiple [{ and ]} actions</li>
+        <li><a href="https://youtrack.jetbrains.com/issue/VIM-2504">VIM-2504</a> Fix esc with using python notebooks</li>
+      </ul>
+
+      <h3>Merged PRs:</h3>
+      <ul>
+        <li><a href="https://github.com/JetBrains/ideavim/pull/441">441</a> by <a href="https://github.com/DanEEStar">DanEEStar</a>:
+          Add Matchit support for Vue.js files
+        </li>
+        <li><a href="https://github.com/JetBrains/ideavim/pull/440">440</a> by <a href="https://github.com/ksrb">Kevin
+          Suen</a>: Add matchit support for handlebars
+        </li>
+        <li><a href="https://github.com/JetBrains/ideavim/pull/448">448</a> by <a href="https://github.com/cravay">Michael
+          Schertenleib</a>: Support custom element names in vim-surround
+        </li>
+        <li><a href="https://github.com/JetBrains/ideavim/pull/435">435</a> by <a href="https://github.com/pmnoxx">Piotr
+          Mikulski</a>: Print stderr when running a command just like vim does
+        </li>
+        <li><a href="https://github.com/JetBrains/ideavim/pull/449">449</a> by <a href="https://github.com/lonre">Lonre
+          Wang</a>: Typo fix
+        </li>
       </ul>
     ]]>
   </change-notes>
@@ -31,11 +57,19 @@
 
   <!-- Please search for "[VERSION UPDATE]" in project in case you update the since-build version -->
   <!-- Check for [Version Update] tag in YouTrack as well -->
-  <idea-version since-build="202.5103.13"/>
+  <!-- Also, please update the value in gradle.build file-->
+  <idea-version since-build="213"/>
 
-  <!-- Mark the plugin as compatible with RubyMine and other products based on the IntelliJ platform -->
-  <depends>com.intellij.modules.lang</depends>
+  <!-- Mark the plugin as compatible with RubyMine and other products based on the IntelliJ platform (including CWM) -->
+  <depends>com.intellij.modules.platform</depends>
   <resource-bundle>messages.IdeaVimBundle</resource-bundle>
+
+  <!-- IDE-Specific configurations -->
+  <!--suppress PluginXmlValidity -->
+  <depends optional="true" config-file="ides/ideavim-withRider.xml">com.intellij.modules.rider</depends>
+  <!--suppress PluginXmlValidity -->
+  <depends optional="true" config-file="ides/ideavim-withAppCode.xml">com.intellij.modules.appcode</depends>
+  <depends optional="true" config-file="ideavim-withAceJump.xml">AceJump</depends>
 
   <application-components>
     <component>
@@ -61,6 +95,7 @@
   <extensions defaultExtensionNs="com.intellij">
     <applicationConfigurable groupId="editor" instance="com.maddyhome.idea.vim.ui.VimEmulationConfigurable"/>
     <projectService serviceImplementation="com.maddyhome.idea.vim.group.NotificationService"/>
+    <projectService serviceImplementation="com.maddyhome.idea.vim.group.LastTabService"/>
     <statusBarWidgetFactory implementation="com.maddyhome.idea.vim.ui.StatusBarIconFactory"/>
     <statusBarWidgetFactory implementation="com.maddyhome.idea.vim.ui.ShowCmdStatusBarWidgetFactory" order="first"/>
 
@@ -76,6 +111,10 @@
     <actionPromoter implementation="com.maddyhome.idea.vim.key.VimActionsPromoter" order="last"/>
 
     <spellchecker.bundledDictionaryProvider implementation="com.maddyhome.idea.vim.VimBundledDictionaryProvider"/>
+
+    <notificationGroup displayType="STICKY_BALLOON" id="ideavim-sticky"/>
+
+    <statistics.applicationUsagesCollector implementation="com.maddyhome.idea.vim.statistic.VimStatistic"/>
   </extensions>
 
   <xi:include href="/META-INF/includes/ApplicationServices.xml" xpointer="xpointer(/idea-plugin/*)"/>

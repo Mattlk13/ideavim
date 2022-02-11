@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,9 @@ package com.maddyhome.idea.vim.vimscript.model.datatypes
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.ex.ExException
-import com.maddyhome.idea.vim.vimscript.model.Executable
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression
 import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
 import com.maddyhome.idea.vim.vimscript.model.expressions.SimpleExpression
@@ -30,14 +31,13 @@ import com.maddyhome.idea.vim.vimscript.model.functions.DefinedFunctionHandler
 import com.maddyhome.idea.vim.vimscript.model.functions.FunctionHandler
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionFlag
 import com.maddyhome.idea.vim.vimscript.services.FunctionStorage
-import com.maddyhome.idea.vim.vimscript.services.VariableService
 
 data class VimFuncref(
   val handler: FunctionHandler,
   val arguments: VimList,
   var dictionary: VimDictionary?,
   val type: Type,
-) : VimDataType(), Cloneable {
+) : VimDataType() {
 
   var isSelfFixed = false
 
@@ -75,12 +75,12 @@ data class VimFuncref(
     throw ExException("E703: using Funcref as a Number")
   }
 
-  fun execute(name: String, args: List<Expression>, editor: Editor, context: DataContext, parent: Executable): VimDataType {
+  fun execute(name: String, args: List<Expression>, editor: Editor, context: DataContext, vimContext: VimLContext): VimDataType {
     if (handler is DefinedFunctionHandler && handler.function.flags.contains(FunctionFlag.DICT)) {
       if (dictionary == null) {
         throw ExException("E725: Calling dict function without Dictionary: $name")
       } else {
-        VariableService.storeVariable(
+        VimPlugin.getVariableService().storeVariable(
           Variable(Scope.LOCAL_VARIABLE, "self"),
           dictionary!!,
           editor,
@@ -97,15 +97,23 @@ data class VimFuncref(
       val handler = when (type) {
         Type.LAMBDA, Type.FUNCREF -> this.handler
         Type.FUNCTION -> {
-          FunctionStorage.getFunctionHandlerOrNull(handler.scope, handler.name, parent)
+          FunctionStorage.getFunctionHandlerOrNull(handler.scope, handler.name, vimContext)
             ?: throw ExException("E117: Unknown function: ${handler.name}")
         }
       }
-      return handler.executeFunction(allArguments, editor, context, parent)
+      return handler.executeFunction(allArguments, editor, context, vimContext)
     }
 
-    override fun clone(): Any {
-      return VimFuncref(handler, arguments, dictionary, type)
+    override fun deepCopy(level: Int): VimFuncref {
+      return copy()
+    }
+
+    override fun lockVar(depth: Int) {
+      this.isLocked = true
+    }
+
+    override fun unlockVar(depth: Int) {
+      this.isLocked = false
     }
 
     enum class Type {

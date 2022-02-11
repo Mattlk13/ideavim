@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,11 @@ package org.jetbrains.plugins.ideavim.action.scroll
 
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.ex.util.EditorUtil
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.StringHelper
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.plugins.ideavim.VimTestCase
 import org.junit.Assert
 
@@ -39,7 +42,7 @@ class ScrollLastScreenColumnActionTest : VimTestCase() {
   }
 
   fun `test scroll caret column to last screen column with sidescrolloff`() {
-    OptionsManager.sidescrolloff.set(10)
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.sidescrolloffName, VimInt(10))
     configureByColumns(200)
     typeText(StringHelper.parseKeys("100|", "ze"))
     assertVisibleLineBounds(0, 30, 109)
@@ -58,7 +61,7 @@ class ScrollLastScreenColumnActionTest : VimTestCase() {
   }
 
   fun `test scroll end of line to last screen column with sidescrolloff`() {
-    OptionsManager.sidescrolloff.set(10)
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.sidescrolloffName, VimInt(10))
     configureByColumns(200)
     typeText(StringHelper.parseKeys("$", "ze"))
     // See myFixture.editor.settings.additionalColumnsCount
@@ -67,7 +70,7 @@ class ScrollLastScreenColumnActionTest : VimTestCase() {
 
   fun `test scroll caret column to last screen column with sidescrolloff containing an inline inlay`() {
     // The offset should include space for the inlay
-    OptionsManager.sidescrolloff.set(10)
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.sidescrolloffName, VimInt(10))
     configureByColumns(200)
     val inlay = addInlay(101, true, 5)
     typeText(StringHelper.parseKeys("100|", "ze"))

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,15 +25,17 @@ import com.maddyhome.idea.vim.helper.EditorHelper
 import com.maddyhome.idea.vim.helper.inVisualMode
 import com.maddyhome.idea.vim.helper.vimLine
 import com.maddyhome.idea.vim.helper.vimSelectionStart
-import com.maddyhome.idea.vim.option.OptionsManager
-import com.maddyhome.idea.vim.vimscript.model.Executable
-import com.maddyhome.idea.vim.vimscript.model.Script
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimList
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
 import com.maddyhome.idea.vim.vimscript.model.datatypes.asVimInt
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression
 import com.maddyhome.idea.vim.vimscript.model.functions.FunctionHandler
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 
 // TODO: 03.08.2021 Support second parameter
 object LineFunctionHandler : FunctionHandler() {
@@ -46,11 +48,9 @@ object LineFunctionHandler : FunctionHandler() {
     argumentValues: List<Expression>,
     editor: Editor,
     context: DataContext,
-    parent: Executable,
+    vimContext: VimLContext,
   ): VimInt {
-    if (editor == null) return VimInt.ZERO
-    val argument = argumentValues[0].evaluate(editor, context, Script(listOf()))
-
+    val argument = argumentValues[0].evaluate(editor, context, vimContext)
     return variableToPosition(editor, argument, true)?.first ?: VimInt.ZERO
   }
 }
@@ -65,11 +65,9 @@ object ColFunctionHandler : FunctionHandler() {
     argumentValues: List<Expression>,
     editor: Editor,
     context: DataContext,
-    parent: Executable,
+    vimContext: VimLContext,
   ): VimDataType {
-    val argument = argumentValues[0].evaluate(editor, context, Script(listOf()))
-    if (editor == null) return VimInt.ZERO
-
+    val argument = argumentValues[0].evaluate(editor, context, vimContext)
     return variableToPosition(editor, argument, false)?.second ?: VimInt.ZERO
   }
 }
@@ -80,7 +78,7 @@ private fun currentCol(editor: Editor): VimInt {
 
   // If virtualedit is set, the col is one more
   // XXX Should we also check the current mode?
-  if (OptionsManager.virtualedit.value.isNotEmpty()) {
+  if ((VimPlugin.getOptionService().getOptionValue(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.virtualeditName) as VimString).value.isNotEmpty()) {
     lineLength += 1
   }
 

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +25,13 @@ import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.command.SelectionType
 import com.maddyhome.idea.vim.common.TextRange
 import com.maddyhome.idea.vim.listener.SelectionVimListenerSuppressor
+import com.maddyhome.idea.vim.newapi.IjVimCaret
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.newapi.VimEditor
 
 /**
  * Pop all modes, but leave editor state. E.g. editor selection is not removed.
@@ -83,6 +87,27 @@ fun Editor.exitSelectMode(adjustCaretPosition: Boolean) {
   }
 }
 
-fun Editor.exitInsertMode(context: DataContext) {
-  VimPlugin.getChange().processEscape(this, context)
+/** [adjustCaretPosition] - if true, caret will be moved one char left if it's on the line end */
+fun VimEditor.exitSelectMode(adjustCaretPosition: Boolean) {
+  if (!this.inSelectMode) return
+
+  this.commandState.popModes()
+  SelectionVimListenerSuppressor.lock().use {
+    this.carets().forEach { vimCaret ->
+      val caret = (vimCaret as IjVimCaret).caret
+      caret.removeSelection()
+      caret.vimSelectionStartClear()
+      if (adjustCaretPosition) {
+        val lineEnd = EditorHelper.getLineEndForOffset((this as IjVimEditor).editor, caret.offset)
+        val lineStart = EditorHelper.getLineStartForOffset(this.editor, caret.offset)
+        if (caret.offset == lineEnd && caret.offset != lineStart) {
+          caret.moveToInlayAwareOffset(caret.offset - 1)
+        }
+      }
+    }
+  }
+}
+
+fun Editor.exitInsertMode(context: DataContext, operatorArguments: OperatorArguments) {
+  VimPlugin.getChange().processEscape(this, context, operatorArguments)
 }

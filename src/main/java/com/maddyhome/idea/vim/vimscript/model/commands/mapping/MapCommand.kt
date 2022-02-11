@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,6 @@ import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
 import com.maddyhome.idea.vim.vimscript.model.commands.Command
 import com.maddyhome.idea.vim.vimscript.model.commands.mapping.MapCommand.SpecialArgument.EXPR
 import com.maddyhome.idea.vim.vimscript.model.commands.mapping.MapCommand.SpecialArgument.SCRIPT
-import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression
 import com.maddyhome.idea.vim.vimscript.model.expressions.SimpleExpression
 import com.maddyhome.idea.vim.vimscript.parser.VimscriptParser
@@ -70,7 +69,7 @@ data class MapCommand(val ranges: Ranges, val argument: String, val cmd: String)
 
     if (arguments.specialArguments.contains(EXPR)) {
       VimPlugin.getKey()
-        .putKeyMapping(modes, arguments.fromKeys, MappingOwner.IdeaVim, arguments.toExpr, arguments.secondArgument, this, commandInfo.isRecursive)
+        .putKeyMapping(modes, arguments.fromKeys, MappingOwner.IdeaVim, arguments.toExpr, arguments.secondArgument, commandInfo.isRecursive)
     } else {
       val toKeys = parseKeys(arguments.secondArgument)
       VimPlugin.getKey()
@@ -169,7 +168,7 @@ data class MapCommand(val ranges: Ranges, val argument: String, val cmd: String)
       val toExpr = if (specialArguments.contains(EXPR)) {
         VimscriptParser.parseExpression(toKeysBuilder.toString().trim()) ?: throw ExException("E15: Invalid expression: ${toKeysBuilder.toString().trim()}")
       } else {
-        SimpleExpression(VimString(toKeysBuilder.toString().trimStart()))
+        SimpleExpression(toKeysBuilder.toString().trimStart())
       }
       CommandArguments(specialArguments, it, toExpr, toKeysBuilder.toString().trimStart())
     }

@@ -1,3 +1,21 @@
+/*
+ * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
+ * Copyright (C) 2003-2022 The IdeaVim authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.maddyhome.idea.vim.vimscript.parser.visitors
 
 import com.intellij.openapi.diagnostic.logger
@@ -39,13 +57,16 @@ import com.maddyhome.idea.vim.vimscript.model.commands.HistoryCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.JoinLinesCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.JumpsCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.LetCommand
+import com.maddyhome.idea.vim.vimscript.model.commands.LockVarCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.MarkCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.MarksCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.MoveTextCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.NextFileCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.NextTabCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.NoHLSearchCommand
+import com.maddyhome.idea.vim.vimscript.model.commands.NormalCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.OnlyCommand
+import com.maddyhome.idea.vim.vimscript.model.commands.PackaddCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.PlugCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.PreviousFileCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.PreviousTabCommand
@@ -62,6 +83,7 @@ import com.maddyhome.idea.vim.vimscript.model.commands.SelectFirstFileCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.SelectLastFileCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.SetCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.SetHandlerCommand
+import com.maddyhome.idea.vim.vimscript.model.commands.SetLocalCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.ShellCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.ShiftLeftCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.ShiftRightCommand
@@ -72,8 +94,10 @@ import com.maddyhome.idea.vim.vimscript.model.commands.SplitType
 import com.maddyhome.idea.vim.vimscript.model.commands.SubstituteCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.TabCloseCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.TabOnlyCommand
+import com.maddyhome.idea.vim.vimscript.model.commands.TabMoveCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.UndoCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.UnknownCommand
+import com.maddyhome.idea.vim.vimscript.model.commands.UnlockVarCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.WriteAllCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.WriteCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.WriteNextFileCommand
@@ -83,7 +107,6 @@ import com.maddyhome.idea.vim.vimscript.model.commands.YankLinesCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.mapping.MapClearCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.mapping.MapCommand
 import com.maddyhome.idea.vim.vimscript.model.commands.mapping.UnMapCommand
-import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression
 import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
 import com.maddyhome.idea.vim.vimscript.model.expressions.SimpleExpression
@@ -163,7 +186,7 @@ object CommandVisitor : VimscriptBaseVisitor<Command>() {
   }
 
   override fun visitLet2Command(ctx: VimscriptParser.Let2CommandContext): Command {
-    return LetCommand(Ranges(), SimpleExpression(VimInt(0)), AssignmentOperator.ASSIGNMENT, SimpleExpression(VimInt(0)), false)
+    return LetCommand(Ranges(), SimpleExpression(0), AssignmentOperator.ASSIGNMENT, SimpleExpression(0), false)
   }
 
   override fun visitEchoCommand(ctx: EchoCommandContext): Command {
@@ -275,13 +298,18 @@ object CommandVisitor : VimscriptBaseVisitor<Command>() {
 
   override fun visitLetCommand(ctx: VimscriptParser.LetCommandContext): Command {
     return com.maddyhome.idea.vim.vimscript.parser.VimscriptParser.parseLetCommand(ctx.text)
-      ?: LetCommand(Ranges(), SimpleExpression(VimInt(0)), AssignmentOperator.ASSIGNMENT, SimpleExpression(VimInt(0)), false)
+      ?: LetCommand(Ranges(), SimpleExpression(0), AssignmentOperator.ASSIGNMENT, SimpleExpression(0), false)
   }
 
-  override fun visitOtherCommand(ctx: OtherCommandContext): UnknownCommand {
+  override fun visitOtherCommand(ctx: OtherCommandContext): Command {
     val ranges: Ranges = parseRanges(ctx.range())
     val name = ctx.commandName().text
     val argument = ctx.commandArgumentWithBars()?.text ?: ""
+
+    val alphabeticPart = name.split(Regex("\\P{Alpha}"))[0]
+    if (setOf("s", "su", "sub", "subs", "subst", "substi", "substit", "substitu", "substitut", "substitut", "substitute").contains(alphabeticPart)) {
+      return SubstituteCommand(ranges, name.replaceFirst(alphabeticPart, "") + argument, alphabeticPart)
+    }
 
     return UnknownCommand(ranges, name, argument)
   }
@@ -462,9 +490,18 @@ object CommandVisitor : VimscriptBaseVisitor<Command>() {
     "nohlsear" to NoHLSearchCommand::class,
     "nohlsearc" to NoHLSearchCommand::class,
     "nohlsearch" to NoHLSearchCommand::class,
+    "norm" to NormalCommand::class,
+    "norma" to NormalCommand::class,
+    "normal" to NormalCommand::class,
     "on" to OnlyCommand::class,
     "onl" to OnlyCommand::class,
     "only" to OnlyCommand::class,
+    "pa" to PackaddCommand::class,
+    "pac" to PackaddCommand::class,
+    "pack" to PackaddCommand::class,
+    "packa" to PackaddCommand::class,
+    "packad" to PackaddCommand::class,
+    "packadd" to PackaddCommand::class,
     "Plug" to PlugCommand::class,
     "Plugi" to PlugCommand::class,
     "Plugin" to PlugCommand::class,
@@ -565,7 +602,13 @@ object CommandVisitor : VimscriptBaseVisitor<Command>() {
     "la" to SelectLastFileCommand::class,
     "las" to SelectLastFileCommand::class,
     "last" to SelectLastFileCommand::class,
+    "se" to SetCommand::class,
     "set" to SetCommand::class,
+    "setl" to SetLocalCommand::class,
+    "setlo" to SetLocalCommand::class,
+    "setloc" to SetLocalCommand::class,
+    "setloca" to SetLocalCommand::class,
+    "setlocal" to SetLocalCommand::class,
     "sethandler" to SetHandlerCommand::class,
     "sh" to ShellCommand::class,
     "she" to ShellCommand::class,
@@ -604,6 +647,10 @@ object CommandVisitor : VimscriptBaseVisitor<Command>() {
     "tabclo" to TabCloseCommand::class,
     "tabclos" to TabCloseCommand::class,
     "tabclose" to TabCloseCommand::class,
+    "tabm" to TabMoveCommand::class,
+    "tabmo" to TabMoveCommand::class,
+    "tabmov" to TabMoveCommand::class,
+    "tabmove" to TabMoveCommand::class,
     "tabo" to TabOnlyCommand::class,
     "tabon" to TabOnlyCommand::class,
     "tabonl" to TabOnlyCommand::class,
@@ -785,6 +832,15 @@ object CommandVisitor : VimscriptBaseVisitor<Command>() {
     "ounmap" to UnMapCommand::class,
     "iunmap" to UnMapCommand::class,
     "cunmap" to UnMapCommand::class,
+    "lockv" to LockVarCommand::class,
+    "lockva" to LockVarCommand::class,
+    "lockvar" to LockVarCommand::class,
+    "unlo" to UnlockVarCommand::class,
+    "unloc" to UnlockVarCommand::class,
+    "unlock" to UnlockVarCommand::class,
+    "unlockv" to UnlockVarCommand::class,
+    "unlockva" to UnlockVarCommand::class,
+    "unlockvar" to UnlockVarCommand::class,
   )
 
   private fun getCommandByName(commandName: String): KClass<out Command> {

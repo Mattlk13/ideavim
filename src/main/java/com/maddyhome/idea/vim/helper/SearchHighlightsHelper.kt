@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,10 +31,12 @@ import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.ui.ColorUtil
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.common.TextRange
 import com.maddyhome.idea.vim.ex.ranges.LineRange
-import com.maddyhome.idea.vim.option.OptionsManager.hlsearch
-import com.maddyhome.idea.vim.option.OptionsManager.wrapscan
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.annotations.Contract
 import java.awt.Color
 import java.awt.Font
@@ -58,7 +60,7 @@ fun updateIncsearchHighlights(
 ): Int {
   val searchStartOffset =
     if (searchRange != null) EditorHelper.getLineStartOffset(editor, searchRange.startLine) else caretOffset
-  val showHighlights = hlsearch.isSet
+  val showHighlights = VimPlugin.getOptionService().isSet(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.hlsearchName)
   return updateSearchHighlights(pattern, false, showHighlights, searchStartOffset, searchRange, forwards, false)
 }
 
@@ -118,7 +120,9 @@ private fun updateSearchHighlights(
       } else if (shouldAddCurrentMatchSearchHighlight(pattern, showHighlights, initialOffset)) {
         // nohlsearch + incsearch
         val searchOptions = EnumSet.of(SearchOptions.WHOLE_FILE)
-        if (wrapscan.isSet) searchOptions.add(SearchOptions.WRAP)
+        if (VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.wrapscanName)) {
+          searchOptions.add(SearchOptions.WRAP)
+        }
         if (shouldIgnoreSmartCase) searchOptions.add(SearchOptions.IGNORE_SMARTCASE)
         if (!forwards) searchOptions.add(SearchOptions.BACKWARDS)
         val result = SearchHelper.findPattern(editor, pattern, initialOffset, 1, searchOptions)
@@ -178,7 +182,7 @@ private fun findClosestMatch(editor: Editor, results: List<TextRange>, initialOf
     }
     d2 - d1
   }
-  if (!wrapscan.isSet) {
+  if (!VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.wrapscanName)) {
     val start = max.startOffset
     if (forwards && start < initialOffset) {
       return -1

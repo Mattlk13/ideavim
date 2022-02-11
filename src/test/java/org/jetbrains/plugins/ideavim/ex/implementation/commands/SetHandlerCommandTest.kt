@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 
 package org.jetbrains.plugins.ideavim.ex.implementation.commands
 
+import com.maddyhome.idea.vim.VimPlugin
+import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.key.ShortcutOwner
 import com.maddyhome.idea.vim.key.ShortcutOwnerInfo
 import com.maddyhome.idea.vim.vimscript.model.commands.SetHandlerCommand
@@ -151,5 +153,29 @@ class SetHandlerCommandTest : VimTestCase() {
       select = ShortcutOwner.IDE
     )
     TestCase.assertEquals("a:ide", owner.toNotation())
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test executing command`() {
+    configureByText("")
+    TestCase.assertTrue(VimPlugin.getKey().savedShortcutConflicts.isEmpty())
+    typeText(commandToKeys("sethandler <C-C> a:ide"))
+    TestCase.assertTrue(VimPlugin.getKey().savedShortcutConflicts.isNotEmpty())
+    val key = VimPlugin.getKey().savedShortcutConflicts.entries.single().key
+    val owner = VimPlugin.getKey().savedShortcutConflicts.entries.single().value
+    TestCase.assertEquals("<C-C>", StringHelper.toKeyNotation(key))
+    assertEquals(ShortcutOwnerInfo.allPerModeIde, owner)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.NOT_VIM_TESTING)
+  fun `test executing command 1`() {
+    configureByText("")
+    TestCase.assertTrue(VimPlugin.getKey().savedShortcutConflicts.isEmpty())
+    typeText(commandToKeys("sethandler <C-C> a:ide "))
+    TestCase.assertTrue(VimPlugin.getKey().savedShortcutConflicts.isNotEmpty())
+    val key = VimPlugin.getKey().savedShortcutConflicts.entries.single().key
+    val owner = VimPlugin.getKey().savedShortcutConflicts.entries.single().value
+    TestCase.assertEquals("<C-C>", StringHelper.toKeyNotation(key))
+    assertEquals(ShortcutOwnerInfo.allPerModeIde, owner)
   }
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,6 @@
 
 package com.maddyhome.idea.vim;
 
-import com.intellij.codeInsight.lookup.LookupManager;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.ShortcutSet;
@@ -28,14 +27,13 @@ import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.actionSystem.TypedAction;
 import com.intellij.openapi.editor.actionSystem.TypedActionHandler;
 import com.intellij.openapi.editor.event.*;
-import com.intellij.openapi.project.Project;
+import com.maddyhome.idea.vim.helper.HandlerInjector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseListener;
-import java.beans.PropertyChangeListener;
 
 /**
  * @author vlan
@@ -54,6 +52,15 @@ public class EventFacade {
 
   public void setupTypedActionHandler(@NotNull VimTypedActionHandler handler) {
     final TypedAction typedAction = getTypedAction();
+
+    if (HandlerInjector.notebookCommandMode()) {
+      TypedActionHandler result = HandlerInjector.inject();
+      if (result != null) {
+        myOriginalTypedActionHandler = result;
+        return;
+      }
+    }
+
     myOriginalTypedActionHandler = typedAction.getRawHandler();
 
     typedAction.setupRawHandler(handler);
@@ -130,19 +137,6 @@ public class EventFacade {
 
   public void removeEditorSelectionListener(@NotNull Editor editor, @NotNull SelectionListener listener) {
     editor.getSelectionModel().removeSelectionListener(listener);
-  }
-
-  // [VERSION UPDATE] 203+
-  @SuppressWarnings("deprecation")
-  public void registerLookupListener(@NotNull Project project, @NotNull PropertyChangeListener propertyChangeListener) {
-    VimProjectService parentDisposable = VimProjectService.getInstance(project);
-    LookupManager.getInstance(project).addPropertyChangeListener(propertyChangeListener, parentDisposable);
-  }
-
-  // [VERSION UPDATE] 203+
-  @SuppressWarnings("deprecation")
-  public void removeLookupListener(@NotNull Project project, @NotNull PropertyChangeListener propertyChangeListener) {
-    LookupManager.getInstance(project).removePropertyChangeListener(propertyChangeListener);
   }
 
   private @NotNull TypedAction getTypedAction() {

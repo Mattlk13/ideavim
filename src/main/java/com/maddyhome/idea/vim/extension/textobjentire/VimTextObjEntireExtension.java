@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -94,10 +94,14 @@ public class VimTextObjEntireExtension implements VimExtension {
         this.ignoreLeadingAndTrailing = ignoreLeadingAndTrailing;
       }
 
+      @Nullable
       @Override
-      public @Nullable
-      TextRange getRange(@NotNull Editor editor, @NotNull Caret caret, @NotNull DataContext context,
-                         int count, int rawCount, @Nullable Argument argument) {
+      public TextRange getRange(@NotNull Editor editor,
+                                @NotNull Caret caret,
+                                @NotNull DataContext context,
+                                int count,
+                                int rawCount,
+                                @Nullable Argument argument) {
         int start = 0, end = editor.getDocument().getTextLength();
 
         // for the `ie` text object we don't want leading an trailing spaces

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -400,6 +400,40 @@ class VimExchangeExtensionTest : VimTestCase() {
       CommandState.Mode.COMMAND,
       CommandState.SubMode.NONE
     )
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.PLUGIN)
+  fun `test change with down motion`() {
+    val before = """
+         The ${c}quick
+         brown fox
+         catch over
+         the lazy dog
+    """.trimIndent()
+    configureByText(before)
+    typeText(StringHelper.parseKeys("cxj"))
+
+    assertHighlighter(0, 19, HighlighterTargetArea.LINES_IN_RANGE)
+
+    // Exit vim-exchange
+    exitExchange()
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.PLUGIN)
+  fun `test cxx`() {
+    val before = """
+         The ${c}quick
+         brown fox
+         catch over
+         the lazy dog
+    """.trimIndent()
+    configureByText(before)
+    typeText(StringHelper.parseKeys("cxx"))
+
+    assertHighlighter(0, 9, HighlighterTargetArea.LINES_IN_RANGE)
+
+    // Exit vim-exchange
+    exitExchange()
   }
 
   private fun exitExchange() {

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,16 +19,16 @@
 package org.jetbrains.plugins.ideavim.action.change.delete
 
 import com.maddyhome.idea.vim.command.CommandState
-import com.maddyhome.idea.vim.option.IdeaJoinOptionsData
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import org.jetbrains.plugins.ideavim.OptionValueType
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimOptionTestCase
 import org.jetbrains.plugins.ideavim.VimOptionTestConfiguration
 import org.jetbrains.plugins.ideavim.VimTestOption
-import org.jetbrains.plugins.ideavim.VimTestOptionType
 
-class DeleteJoinLinesSpacesActionTest : VimOptionTestCase(IdeaJoinOptionsData.name) {
-  @VimOptionTestConfiguration(VimTestOption(IdeaJoinOptionsData.name, VimTestOptionType.TOGGLE, ["true"]))
+class DeleteJoinLinesSpacesActionTest : VimOptionTestCase(OptionConstants.ideajoinName) {
+  @VimOptionTestConfiguration(VimTestOption(OptionConstants.ideajoinName, OptionValueType.NUMBER, "1"))
   fun `test join with idea`() {
     doTest(
       "J",
@@ -52,7 +52,7 @@ class DeleteJoinLinesSpacesActionTest : VimOptionTestCase(IdeaJoinOptionsData.na
     )
   }
 
-  @VimOptionTestConfiguration(VimTestOption(IdeaJoinOptionsData.name, VimTestOptionType.TOGGLE, ["true"]))
+  @VimOptionTestConfiguration(VimTestOption(OptionConstants.ideajoinName, OptionValueType.NUMBER, "1"))
   fun `test join with idea with count`() {
     doTest(
       "3J",
@@ -76,7 +76,7 @@ class DeleteJoinLinesSpacesActionTest : VimOptionTestCase(IdeaJoinOptionsData.na
   }
 
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
-  @VimOptionTestConfiguration(VimTestOption(IdeaJoinOptionsData.name, VimTestOptionType.TOGGLE, ["true"]))
+  @VimOptionTestConfiguration(VimTestOption(OptionConstants.ideajoinName, OptionValueType.NUMBER, "1"))
   fun `test join with idea with large count`() {
     doTest(
       "10J",

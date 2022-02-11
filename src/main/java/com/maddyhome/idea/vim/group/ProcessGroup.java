@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,9 +40,14 @@ import com.maddyhome.idea.vim.command.CommandState;
 import com.maddyhome.idea.vim.ex.ExException;
 import com.maddyhome.idea.vim.ex.InvalidCommandException;
 import com.maddyhome.idea.vim.helper.UiHelper;
-import com.maddyhome.idea.vim.option.OptionsManager;
+import com.maddyhome.idea.vim.newapi.IjVimEditor;
+import com.maddyhome.idea.vim.newapi.VimEditor;
 import com.maddyhome.idea.vim.ui.ex.ExEntryPanel;
 import com.maddyhome.idea.vim.vimscript.Executor;
+import com.maddyhome.idea.vim.vimscript.model.CommandLineVimLContext;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -69,7 +74,7 @@ public class ProcessGroup {
     panel.activate(editor, context, label, initText, count);
   }
 
-  public @NotNull String endSearchCommand(final @NotNull Editor editor) {
+  public @NotNull String endSearchCommand() {
     ExEntryPanel panel = ExEntryPanel.getInstance();
     panel.deactivate(true);
 
@@ -86,7 +91,7 @@ public class ProcessGroup {
     panel.activate(editor, context, ":", initText, 1);
   }
 
-  public boolean processExKey(Editor editor, @NotNull KeyStroke stroke) {
+  public boolean processExKey(@NotNull VimEditor editor, @NotNull KeyStroke stroke) {
     // This will only get called if somehow the key focus ended up in the editor while the ex entry window
     // is open. So I'll put focus back in the editor and process the key.
 
@@ -124,7 +129,7 @@ public class ProcessGroup {
 
       if (logger.isDebugEnabled()) logger.debug("swing=" + SwingUtilities.isEventDispatchThread());
 
-      Executor.INSTANCE.execute(text, editor, context, false, true);
+      Executor.INSTANCE.execute(text, editor, context, false, true, CommandLineVimLContext.INSTANCE);
     }
     catch (ExException e) {
       VimPlugin.showMessage(e.getMessage());
@@ -142,7 +147,7 @@ public class ProcessGroup {
 
   public void cancelExEntry(final @NotNull Editor editor, boolean resetCaret) {
     CommandState.getInstance(editor).popModes();
-    KeyHandler.getInstance().reset(editor);
+    KeyHandler.getInstance().reset(new IjVimEditor(editor));
     ExEntryPanel panel = ExEntryPanel.getInstance();
     panel.deactivate(true, resetCaret);
   }
@@ -171,7 +176,7 @@ public class ProcessGroup {
     return initText;
   }
 
-  public @Nullable String executeCommand(@NotNull Editor editor, @NotNull String command, @Nullable CharSequence input)
+  public @Nullable String executeCommand(@NotNull Editor editor, @NotNull String command, @Nullable CharSequence input, @Nullable String currentDirectoryPath)
     throws ExecutionException, ProcessCanceledException {
 
     // This is a much simplified version of how Vim does this. We're using stdin/stdout directly, while Vim will
@@ -180,10 +185,11 @@ public class ProcessGroup {
     // better with Windows. We also don't bother using ShellExecute for Windows commands beginning with `start`.
     // Finally, we're also not bothering with the crazy space and backslash handling of the 'shell' options content.
     return ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
-      final String shell = OptionsManager.INSTANCE.getShell().getValue();
-      final String shellcmdflag = OptionsManager.INSTANCE.getShellcmdflag().getValue();
-      final String shellxescape = OptionsManager.INSTANCE.getShellxescape().getValue();
-      final String shellxquote = OptionsManager.INSTANCE.getShellxquote().getValue();
+
+      final String shell = ((VimString) VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.shellName, OptionConstants.shellName)).getValue();
+      final String shellcmdflag = ((VimString) VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.shellcmdflagName, OptionConstants.shellcmdflagName)).getValue();
+      final String shellxescape = ((VimString) VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.shellxescapeName, OptionConstants.shellxescapeName)).getValue();
+      final String shellxquote = ((VimString) VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.shellxquoteName, OptionConstants.shellxquoteName)).getValue();
 
       // For Win32. See :help 'shellxescape'
       final String escapedCommand = shellxquote.equals("(")
@@ -209,6 +215,9 @@ public class ProcessGroup {
       }
 
       final GeneralCommandLine commandLine = new GeneralCommandLine(commands);
+      if (currentDirectoryPath != null) {
+        commandLine.setWorkDirectory(currentDirectoryPath);
+      }
       final CapturingProcessHandler handler = new CapturingProcessHandler(commandLine);
       if (input != null) {
         handler.addProcessListener(new ProcessAdapter() {
@@ -242,10 +251,10 @@ public class ProcessGroup {
       if (exitCode != null && exitCode != 0) {
         VimPlugin.showMessage("shell returned " + exitCode);
         VimPlugin.indicateError();
-        return output.getStderr() + output.getStdout();
       }
 
-      return output.getStdout();
+      // Get stderr; stdout and strip colors, which are not handles properly.
+      return (output.getStderr() + output.getStdout()).replaceAll("\u001B\\[[;\\d]*m", "");
     }, "IdeaVim - !" + command, true, editor.getProject());
   }
 

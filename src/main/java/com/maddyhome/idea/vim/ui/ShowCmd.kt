@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.StatusBarWidgetFactory
@@ -29,11 +30,14 @@ import com.intellij.openapi.wm.WindowManager
 import com.intellij.openapi.wm.impl.status.EditorBasedWidget
 import com.intellij.openapi.wm.impl.status.widget.StatusBarWidgetsManager
 import com.intellij.util.Consumer
+import com.maddyhome.idea.vim.VimPlugin
+import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.helper.VimNlsSafe
-import com.maddyhome.idea.vim.helper.vimCommandState
-import com.maddyhome.idea.vim.option.OptionChangeListener
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
+import com.maddyhome.idea.vim.vimscript.model.options.OptionChangeListener
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.annotations.NonNls
 import java.awt.Component
 import java.awt.event.MouseEvent
@@ -45,8 +49,7 @@ object ShowCmd {
   @NonNls
   internal const val ID = "IdeaVim::ShowCmd"
 
-  // [VERSION UPDATE] 203+ Annotation should be replaced with @NlsSafe
-  @NonNls
+  @NlsSafe
   internal const val displayName = "IdeaVim showcmd"
 
   fun update() {
@@ -64,15 +67,15 @@ object ShowCmd {
   }
 
   fun getFullText(editor: Editor?): String {
-    if (!OptionsManager.showcmd.isSet || editor == null || editor.isDisposed) return ""
+    if (!VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.showcmdName) || editor == null || editor.isDisposed) return ""
 
-    val editorState = editor.vimCommandState ?: return ""
+    val editorState = CommandState.getInstance(editor)
     return StringHelper.toPrintableCharacters(editorState.commandBuilder.keys + editorState.mappingState.keys)
   }
 }
 
-object ShowCmdOptionChangeListener : OptionChangeListener<Boolean> {
-  override fun valueChange(oldValue: Boolean?, newValue: Boolean?) {
+object ShowCmdOptionChangeListener : OptionChangeListener<VimDataType> {
+  override fun processGlobalValueChange(oldValue: VimDataType?) {
     ShowCmd.update()
 
     val extension = StatusBarWidgetFactory.EP_NAME.findExtension(ShowCmdStatusBarWidgetFactory::class.java) ?: return
@@ -93,7 +96,7 @@ class ShowCmdStatusBarWidgetFactory : StatusBarWidgetFactory/*, LightEditCompati
     // Nothing
   }
 
-  override fun isAvailable(project: Project): Boolean = OptionsManager.showcmd.isSet
+  override fun isAvailable(project: Project): Boolean = VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.showcmdName)
 
   override fun createWidget(project: Project): StatusBarWidget = Widget(project)
 

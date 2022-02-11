@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,8 @@ import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.Direction
 import com.maddyhome.idea.vim.helper.RunnableHelper
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
@@ -1415,16 +1416,17 @@ class SearchGroupTest : VimTestCase() {
     assertEquals(9, res)
   }
 
-  private fun setIgnoreCase() = OptionsManager.ignorecase.set()
+  private fun setIgnoreCase() = VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.ignorecaseName)
+  private fun setSmartCase() = VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.smartcaseName)
 
   private fun setIgnoreCaseAndSmartCase() {
-    OptionsManager.ignorecase.set()
-    OptionsManager.smartcase.set()
+    setIgnoreCase()
+    setSmartCase()
   }
 
-  private fun setHighlightSearch() = OptionsManager.hlsearch.set()
-  private fun clearHighlightSearch() = OptionsManager.hlsearch.reset()
-  private fun setIncrementalSearch() = OptionsManager.incsearch.set()
+  private fun setHighlightSearch() = VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.hlsearchName)
+  private fun clearHighlightSearch() = VimPlugin.getOptionService().unsetOption(OptionService.Scope.GLOBAL, OptionConstants.hlsearchName)
+  private fun setIncrementalSearch() = VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.incsearchName)
 
   // TODO: Remove these search methods and test by invoking VIM commands rather than calling APIs
   private fun search(pattern: String, input: String, expectedLocation: Int): Int {

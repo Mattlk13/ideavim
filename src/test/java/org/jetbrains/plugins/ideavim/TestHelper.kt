@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,10 +23,13 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.testFramework.EditorTestUtil
 import com.intellij.testFramework.fixtures.CodeInsightTestFixture
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.common.TextRange
 import com.maddyhome.idea.vim.helper.mode
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import kotlin.test.fail
 
 /**
@@ -75,7 +78,7 @@ inline fun waitAndAssert(timeInMillis: Int = 1000, condition: () -> Boolean) {
 fun waitAndAssertMode(
   fixture: CodeInsightTestFixture,
   mode: CommandState.Mode,
-  timeInMillis: Int = OptionsManager.visualEnterDelay.value() + 1000,
+  timeInMillis: Int = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.visualdelayName) as VimInt).value + 1000,
 ) {
   waitAndAssert(timeInMillis) { fixture.editor.mode == mode }
 }

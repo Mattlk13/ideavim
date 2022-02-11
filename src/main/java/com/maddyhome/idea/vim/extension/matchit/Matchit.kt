@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,7 @@ import com.maddyhome.idea.vim.command.CommandFlags
 import com.maddyhome.idea.vim.command.CommandState.Companion.getInstance
 import com.maddyhome.idea.vim.command.MappingMode
 import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.extension.VimExtension
 import com.maddyhome.idea.vim.extension.VimExtensionFacade
 import com.maddyhome.idea.vim.extension.VimExtensionFacade.putKeyMappingIfMissing
@@ -82,11 +83,10 @@ class Matchit : VimExtension {
       editor: Editor,
       caret: Caret,
       context: DataContext,
-      count: Int,
-      rawCount: Int,
       argument: Argument?,
+      operatorArguments: OperatorArguments,
     ): Motion {
-      return getMatchitOffset(editor, caret, rawCount, isInOpPending, reverse).toMotionOrError()
+      return getMatchitOffset(editor, caret, operatorArguments.count0, isInOpPending, reverse).toMotionOrError()
     }
 
     override fun process(cmd: Command) {
@@ -194,7 +194,7 @@ private object MatchitPatterns {
 
   // Files that can contain HTML or HTML-like content.
   // These are just the file types that have HTML Matchit support enabled by default in their Vim ftplugin files.
-  private val htmlLikeFileTypes = arrayOf("HTML", "XML", "XHTML", "JSP", "JavaScript", "JSX Harmony", "TypeScript", "TypeScript JSX")
+  private val htmlLikeFileTypes = arrayOf("Handlebars/Mustache", "HTML", "XML", "XHTML", "JSP", "JavaScript", "JSX Harmony", "TypeScript", "TypeScript JSX", "Vue.js")
 
   private val htmlPatternsTable = createHtmlPatternsTable()
   private val rubyPatternsTable = createRubyPatternsTable()

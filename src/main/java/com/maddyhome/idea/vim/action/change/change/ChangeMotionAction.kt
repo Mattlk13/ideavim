@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.action.DuplicableOperatorAction
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.handler.ChangeEditorActionHandler
 
 class ChangeMotionAction : ChangeEditorActionHandler.ForEachCaret(), DuplicableOperatorAction {
@@ -37,10 +38,15 @@ class ChangeMotionAction : ChangeEditorActionHandler.ForEachCaret(), DuplicableO
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Boolean {
-    return argument != null && VimPlugin.getChange().changeMotion(editor, caret, context, count, rawCount, argument)
+    return argument != null && VimPlugin.getChange().changeMotion(
+      editor,
+      caret,
+      context,
+      argument,
+      operatorArguments
+    )
   }
 }

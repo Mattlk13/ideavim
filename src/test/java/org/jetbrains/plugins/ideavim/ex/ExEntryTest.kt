@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,9 +21,10 @@ package org.jetbrains.plugins.ideavim.ex
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
-import com.maddyhome.idea.vim.option.OptionsManager
 import com.maddyhome.idea.vim.ui.ex.ExDocument
 import com.maddyhome.idea.vim.ui.ex.ExEntryPanel
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
@@ -37,46 +38,46 @@ class ExEntryTest : VimTestCase() {
   }
 
   fun `test cancel entry`() {
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     typeExInput(":set incsearch<Esc>")
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     assertIsDeactivated()
 
     deactivateExEntry()
 
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     typeExInput(":set incsearch<C-[>")
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     assertIsDeactivated()
 
     deactivateExEntry()
 
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     typeExInput(":set incsearch<C-C>")
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     assertIsDeactivated()
   }
 
   fun `test complete entry`() {
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     typeExInput(":set incsearch<Enter>")
-    assertTrue(OptionsManager.incsearch.isSet)
+    assertTrue(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     assertIsDeactivated()
 
     deactivateExEntry()
-    OptionsManager.resetAllOptions()
+    VimPlugin.getOptionService().resetAllOptions()
 
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     typeExInput(":set incsearch<C-J>")
-    assertTrue(OptionsManager.incsearch.isSet)
+    assertTrue(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     assertIsDeactivated()
 
     deactivateExEntry()
-    OptionsManager.resetAllOptions()
+    VimPlugin.getOptionService().resetAllOptions()
 
-    assertFalse(OptionsManager.incsearch.isSet)
+    assertFalse(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     typeExInput(":set incsearch<C-M>")
-    assertTrue(OptionsManager.incsearch.isSet)
+    assertTrue(VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.incsearchName))
     assertIsDeactivated()
   }
 
@@ -593,13 +594,13 @@ class ExEntryTest : VimTestCase() {
   }
 
   fun `test cmap Ctrl`() {
-    typeExInput(":cmap \\<C-B> b<CR>")
+    typeText(StringHelper.stringToKeys(":cmap <C-B> b") + StringHelper.parseKeys("<CR>"))
     typeExInput(":<C-B>")
     assertExText("b")
     deactivateExEntry()
 
     VimPlugin.getRegister().setKeys('e', StringHelper.parseKeys("hello world"))
-    typeExInput(":cmap d \\<C-R><CR>")
+    typeText(StringHelper.stringToKeys(":cmap d <C-R>") + StringHelper.parseKeys("<CR>"))
     typeExInput(":de")
     assertExText("hello world")
   }

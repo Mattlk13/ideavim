@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,20 +20,21 @@
 
 package org.jetbrains.plugins.ideavim.action.motion.leftright
 
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.option.KeyModelOptionData
-import com.maddyhome.idea.vim.option.OptionsManager
-import com.maddyhome.idea.vim.option.SelectModeOptionData
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
+import org.jetbrains.plugins.ideavim.OptionValueType
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimOptionDefaultAll
 import org.jetbrains.plugins.ideavim.VimOptionTestCase
 import org.jetbrains.plugins.ideavim.VimOptionTestConfiguration
 import org.jetbrains.plugins.ideavim.VimTestOption
-import org.jetbrains.plugins.ideavim.VimTestOptionType
 
-class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, SelectModeOptionData.name) {
+class MotionShiftHomeActionTest : VimOptionTestCase(OptionConstants.keymodelName, OptionConstants.selectmodeName) {
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionDefaultAll
   fun `test simple home`() {
@@ -59,13 +60,14 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
 
   @VimOptionDefaultAll
   fun `test default continueselect`() {
-    assertTrue(KeyModelOptionData.continueselect in OptionsManager.keymodel)
+    val keymodel = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.keymodelName) as VimString).value
+    assertTrue(OptionConstants.keymodel_continueselect in keymodel)
   }
 
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
-    VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, [KeyModelOptionData.startsel]),
-    VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [])
+    VimTestOption(OptionConstants.keymodelName, OptionValueType.STRING, OptionConstants.keymodel_startsel),
+    VimTestOption(OptionConstants.selectmodeName, OptionValueType.STRING, "")
   )
   fun `test start visual`() {
     val keys = listOf("<S-Home>")
@@ -90,8 +92,8 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
 
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
-    VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, [KeyModelOptionData.startsel]),
-    VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [SelectModeOptionData.key])
+    VimTestOption(OptionConstants.keymodelName, OptionValueType.STRING, OptionConstants.keymodel_startsel),
+    VimTestOption(OptionConstants.selectmodeName, OptionValueType.STRING, OptionConstants.selectmode_key)
   )
   fun `test start select`() {
     val keys = listOf("<S-Home>")
@@ -115,8 +117,8 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
   }
 
   @VimOptionTestConfiguration(
-    VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, []),
-    VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [])
+    VimTestOption(OptionConstants.keymodelName, OptionValueType.STRING, ""),
+    VimTestOption(OptionConstants.selectmodeName, OptionValueType.STRING, "")
   )
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   fun `test continue visual`() {
@@ -145,8 +147,8 @@ class MotionShiftHomeActionTest : VimOptionTestCase(KeyModelOptionData.name, Sel
   }
 
   @VimOptionTestConfiguration(
-    VimTestOption(KeyModelOptionData.name, VimTestOptionType.LIST, []),
-    VimTestOption(SelectModeOptionData.name, VimTestOptionType.LIST, [])
+    VimTestOption(OptionConstants.keymodelName, OptionValueType.STRING, ""),
+    VimTestOption(OptionConstants.selectmodeName, OptionValueType.STRING, "")
   )
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   fun `test continue select`() {

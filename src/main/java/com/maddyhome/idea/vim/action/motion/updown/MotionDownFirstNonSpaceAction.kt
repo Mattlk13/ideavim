@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,13 +23,14 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
-import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.handler.Motion
 import com.maddyhome.idea.vim.handler.MotionActionHandler
 import com.maddyhome.idea.vim.handler.toMotion
+import com.maddyhome.idea.vim.helper.ActionExecutor
 
 class MotionDownFirstNonSpaceAction : MotionActionHandler.ForEachCaret() {
   override val motionType: MotionType = MotionType.LINE_WISE
@@ -38,11 +39,10 @@ class MotionDownFirstNonSpaceAction : MotionActionHandler.ForEachCaret() {
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Motion {
-    return VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, count).toMotion()
+    return VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, operatorArguments.count1).toMotion()
   }
 }
 
@@ -53,16 +53,15 @@ class EnterNormalAction : MotionActionHandler.ForEachCaret() {
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Motion {
     val templateState = TemplateManagerImpl.getTemplateState(editor)
     return if (templateState != null) {
-      KeyHandler.executeAction(IdeActions.ACTION_EDITOR_NEXT_TEMPLATE_VARIABLE, context)
+      ActionExecutor.executeAction(IdeActions.ACTION_EDITOR_NEXT_TEMPLATE_VARIABLE, context)
       Motion.NoMotion
     } else {
-      VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, count).toMotion()
+      VimPlugin.getMotion().moveCaretToLineStartSkipLeadingOffset(editor, caret, operatorArguments.count1).toMotion()
     }
   }
 }

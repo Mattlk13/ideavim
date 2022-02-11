@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -56,9 +56,12 @@ import com.maddyhome.idea.vim.common.TextRange;
 import com.maddyhome.idea.vim.handler.EditorActionHandlerBase;
 import com.maddyhome.idea.vim.helper.EditorHelper;
 import com.maddyhome.idea.vim.helper.StringHelper;
-import com.maddyhome.idea.vim.option.OptionsManager;
-import com.maddyhome.idea.vim.option.StringListOption;
 import com.maddyhome.idea.vim.ui.ClipboardHandler;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
+import com.maddyhome.idea.vim.vimscript.model.options.OptionChangeListener;
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
 import kotlin.Pair;
 import org.jdom.Element;
 import org.jetbrains.annotations.NonNls;
@@ -87,7 +90,7 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
   public static final char SMALL_DELETION_REGISTER = '-';
   public static final char BLACK_HOLE_REGISTER = '_';
   public static final char ALTERNATE_BUFFER_REGISTER = '#';  // Not supported
-  public static final char EXPRESSION_BUFFER_REGISTER = '='; // Not supported
+  public static final char EXPRESSION_BUFFER_REGISTER = '=';
   public static final char CURRENT_FILENAME_REGISTER = '%';  // Not supported
   public static final @NonNls String CLIPBOARD_REGISTERS = "*+";
   private static final @NonNls String NUMBERED_REGISTERS = "0123456789";
@@ -98,11 +101,11 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
   private static final String READONLY_REGISTERS = ""
     + CURRENT_FILENAME_REGISTER + LAST_COMMAND_REGISTER + LAST_INSERTED_TEXT_REGISTER + ALTERNATE_BUFFER_REGISTER
     + EXPRESSION_BUFFER_REGISTER; // Expression buffer is not actually readonly
-  private static final @NonNls String RECORDABLE_REGISTERS = NUMBERED_REGISTERS + NAMED_REGISTERS;
+  private static final @NonNls String RECORDABLE_REGISTERS = NUMBERED_REGISTERS + NAMED_REGISTERS + UNNAMED_REGISTER;
   private static final String PLAYBACK_REGISTERS = RECORDABLE_REGISTERS + UNNAMED_REGISTER + CLIPBOARD_REGISTERS + LAST_INSERTED_TEXT_REGISTER;
   public static final String VALID_REGISTERS = WRITABLE_REGISTERS + READONLY_REGISTERS;
 
-  private static final Logger logger = Logger.getInstance(RegisterGroup.class.getName());
+  private static final Logger logger = Logger.getInstance(RegisterGroup.class);
 
   private final @NotNull HashMap<Character, Register> registers = new HashMap<>();
   private char defaultRegister = UNNAMED_REGISTER;
@@ -111,19 +114,28 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
   private @Nullable List<KeyStroke> recordList = null;
 
   public RegisterGroup() {
-    final StringListOption clipboardOption = OptionsManager.INSTANCE.getClipboard();
-    clipboardOption.addOptionChangeListenerAndExecute((oldValue, newValue) -> {
-      if (clipboardOption.contains("unnamed")) {
-        defaultRegister = '*';
-      }
-      else if (clipboardOption.contains("unnamedplus")) {
-        defaultRegister = '+';
-      }
-      else {
-        defaultRegister = UNNAMED_REGISTER;
-      }
-      lastRegister = defaultRegister;
-    });
+
+    VimPlugin.getOptionService().addListener(
+      OptionConstants.clipboardName,
+      new OptionChangeListener<VimDataType>() {
+        @Override
+        public void processGlobalValueChange(@Nullable VimDataType oldValue) {
+          String clipboardOptionValue = ((VimString) VimPlugin.getOptionService()
+            .getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.clipboardName, OptionConstants.clipboardName)).getValue();
+          if (clipboardOptionValue.contains("unnamed")) {
+            defaultRegister = '*';
+          }
+          else if (clipboardOptionValue.contains("unnamedplus")) {
+            defaultRegister = '+';
+          }
+          else {
+            defaultRegister = UNNAMED_REGISTER;
+          }
+          lastRegister = defaultRegister;
+        }
+      },
+      true
+    );
   }
 
   /**
@@ -164,6 +176,8 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
   }
 
   public void resetRegisters() {
+    defaultRegister = UNNAMED_REGISTER;
+    lastRegister = defaultRegister;
     registers.clear();
   }
 
@@ -346,7 +360,7 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
     String rawText = TextBlockTransferable.convertLineSeparators(text, "\n", transferableDatas);
 
 
-    if (OptionsManager.INSTANCE.getIdeacopypreprocess().getValue()) {
+    if (VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.ideacopypreprocessName, OptionConstants.ideacopypreprocessName)) {
       String escapedText;
       for (CopyPastePreProcessor processor : CopyPastePreProcessor.EP_NAME.getExtensionList()) {
         escapedText = processor.preprocessOnCopy(file, textRange.getStartOffsets(), textRange.getEndOffsets(), rawText);
@@ -456,7 +470,7 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
     }
   }
 
-  public void recordKeyStroke(KeyStroke key) {
+  public void recordKeyStroke(@NotNull KeyStroke key) {
     if (recordRegister != 0 && recordList != null) {
       recordList.add(key);
     }
@@ -499,20 +513,28 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
   }
 
   public void saveData(final @NotNull Element element) {
-    logger.debug("saveData");
+    logger.debug("Save registers data");
     final Element registersElement = new Element("registers");
+    if (logger.isTraceEnabled()) {
+      logger.trace("Saving " + registers.size() + " registers");
+    }
     for (Character key : registers.keySet()) {
       final Register register = registers.get(key);
+      if (logger.isTraceEnabled()) {
+        logger.trace("Saving register '" + key + "'");
+      }
       final Element registerElement = new Element("register");
       registerElement.setAttribute("name", String.valueOf(key));
       registerElement.setAttribute("type", Integer.toString(register.getType().getValue()));
       final String text = register.getText();
       if (text != null) {
+        logger.trace("Save register as 'text'");
         final Element textElement = new Element("text");
         StringHelper.setSafeXmlText(textElement, text);
         registerElement.addContent(textElement);
       }
       else {
+        logger.trace("Save register as 'keys'");
         final Element keys = new Element("keys");
         final List<KeyStroke> list = register.getKeys();
         for (KeyStroke stroke : list) {
@@ -528,29 +550,41 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
     }
 
     element.addContent(registersElement);
+    logger.debug("Finish saving registers data");
   }
 
   public void readData(final @NotNull Element element) {
-    logger.debug("readData");
+    logger.debug("Read registers data");
     final Element registersElement = element.getChild("registers");
     if (registersElement != null) {
+      logger.trace("'registers' element is not null");
       final List<Element> registerElements = registersElement.getChildren("register");
+      if (logger.isTraceEnabled()) {
+        logger.trace("Detected " + registerElements.size() + " register elements");
+      }
       for (Element registerElement : registerElements) {
         final char key = registerElement.getAttributeValue("name").charAt(0);
+        if (logger.isTraceEnabled()) {
+          logger.trace("Read register '" + key + "'");
+        }
         final Register register;
         final Element textElement = registerElement.getChild("text");
         final String typeText = registerElement.getAttributeValue("type");
         final SelectionType type = SelectionType.fromValue(Integer.parseInt(typeText));
         if (textElement != null) {
+          logger.trace("Register has 'text' element");
           final String text = StringHelper.getSafeXmlText(textElement);
           if (text != null) {
+            logger.trace("Register data parsed");
             register = new Register(key, type, text, Collections.emptyList());
           }
           else {
+            logger.trace("Cannot parse register data");
             register = null;
           }
         }
         else {
+          logger.trace("Register has 'keys' element");
           final Element keysElement = registerElement.getChild("keys");
           final List<Element> keyElements = keysElement.getChildren("key");
           final List<KeyStroke> strokes = new ArrayList<>();
@@ -565,9 +599,11 @@ public class RegisterGroup implements PersistentStateComponent<Element> {
           }
           register = new Register(key, type, strokes);
         }
+        logger.trace("Save register to vim registers");
         registers.put(key, register);
       }
     }
+    logger.debug("Finish reading registers data");
   }
 
   private @Nullable Register refreshClipboardRegister(char r) {

@@ -6,10 +6,10 @@ grammar Vimscript;
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 script:
-    blockMember* EOF;
+    augroup? blockMember* EOF;
 
 forLoop:
-    (WS | COLON)* FOR WS+ (variableName | (L_BRACKET argumentsDeclaration R_BRACKET)) WS+ IN WS* expr WS* ((inline_comment NEW_LINE) | (NEW_LINE | BAR)+)
+    (WS | COLON)* FOR WS+ ((variableScope COLON)? variableName | (L_BRACKET argumentsDeclaration R_BRACKET)) WS+ IN WS* expr WS* ((inline_comment NEW_LINE) | (NEW_LINE | BAR)+)
         blockMember*
     (WS | COLON)* ENDFOR WS* ((inline_comment NEW_LINE) | (NEW_LINE | BAR)+)
 ;
@@ -20,11 +20,12 @@ whileLoop:
     (WS | COLON)* ENDWHILE WS* ((inline_comment NEW_LINE) | (NEW_LINE | BAR))
 ;
 blockMember:
-    command | continueStatement | breakStatement | forLoop| whileLoop | ifStatement
+    command | finishStatement | continueStatement | breakStatement | forLoop| whileLoop | ifStatement
 |   returnStatement | throwStatement | functionDefinition | tryStatement | ((WS | COLON)* (NEW_LINE | BAR)) | autoCmd | comment;
 
-comment:                QUOTE ~(NEW_LINE)* NEW_LINE;
+comment:                (WS | COLON)* QUOTE ~(NEW_LINE)* NEW_LINE;
 
+finishStatement:        (WS | COLON)* FINISH WS* (NEW_LINE | BAR);
 continueStatement:      (WS | COLON)* CONTINUE WS* (NEW_LINE | BAR);
 breakStatement:         (WS | COLON)* BREAK WS* (NEW_LINE | BAR);
 returnStatement:        (WS | COLON)* range? (WS | COLON)* RETURN WS+ expr WS* (NEW_LINE | BAR);
@@ -73,6 +74,8 @@ defaultValue:           variableName WS* ASSIGN WS* expr;
 
 autoCmd:                (WS | COLON)* AUTOCMD commandArgument = ~(NEW_LINE)*? NEW_LINE;
 
+augroup:                (WS | COLON)* AUGROUP .*? AUGROUP WS+ END WS* NEW_LINE;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  Command related rules:
@@ -82,7 +85,8 @@ command:
     (WS | COLON)* (range | shortRange) (WS | COLON)* (NEW_LINE | BAR)+
     #GoToLineCommand|
 
-    (WS | COLON)* range? (WS | COLON)* LET WS+ (~(NEW_LINE | BAR)+ | string)*? (NEW_LINE | BAR)+
+//    (WS | COLON)* range? (WS | COLON)* LET WS+ (~(NEW_LINE | BAR)+ | string)+ (NEW_LINE | BAR)+
+    letCommands
     #LetCommand|
 
     (WS | COLON)* range? (WS | COLON)* ECHO (WS* expr)* WS* (NEW_LINE | BAR)+
@@ -106,28 +110,28 @@ command:
     (WS | COLON)* range? (WS | COLON)*
       name = (
         Y_LOWERCASE | YANK_LINES | X_LOWERCASE | WRITE_QUIT | WRITE_PREVIOUS | WRITE_NEXT | W_LOWERCASE | WRITE
-        | WRITE_ALL | U_LOWERCASE | UNDO | TAB_ONLY | TAB_CLOSE | SOURCE | V_SPLIT | SHELL | SET_HANDLER | SET
+        | WRITE_ALL | U_LOWERCASE | UNDO | TAB_ONLY | TAB_CLOSE | SOURCE | V_SPLIT | SPLIT | SHELL | SET_HANDLER | SET | SETLOCAL
         | SELECT_LAST_FILE | SELECT_FIRST_FILE | SELECT_FILE | AT | REDO | Q_LOWERCASE | QUIT | PUT_LINES | PROMPT_FIND
         | PROMPT_REPLACE | P_LOWERCASE | P_UPPERCASE | PRINT | PREVIOUS_TAB | N_UPPERCASE | PREVIOUS_FILE | PLUG
         | ONLY | NO_HL_SEARCH | NEXT_TAB | N_LOWERCASE | NEXT_FILE | M_LOWERCASE | MOVE_TEXT | MARKS | K_LOWERCASE
         | MARK_COMMAND | JUMPS | J_LOWERCASE | JOIN_LINES | HISTORY | GO_TO_CHAR | SYMBOL | FIND | CLASS | F_LOWERCASE
         | FILE | EXIT | E_LOWERCASE | EDIT_FILE | DUMP_LINE | DIGRAPH | DEL_MARKS | D_LOWERCASE | DEL_LINES | DELCMD
-        | T_LOWERCASE | COPY | CMD_CLEAR | EXCLAMATION | BUFFER_LIST | BUFFER_CLOSE | B_LOWERCASE | BUFFER | ASCII
-        | ACTIONLIST | ACTION
+        | T_LOWERCASE | COPY | CMD_CLEAR | BUFFER_LIST | BUFFER_CLOSE | B_LOWERCASE | BUFFER | ASCII
+        | ACTIONLIST | ACTION | LOCKVAR | UNLOCKVAR | PACKADD | TABMOVE
       )
     WS* ((commandArgumentWithoutBars? inline_comment NEW_LINE) | (commandArgumentWithoutBars? NEW_LINE) | (commandArgumentWithoutBars? BAR)) (NEW_LINE | BAR)*
     #CommandWithComment|
 
     (WS | COLON)* range? (WS | COLON)*
       name = (
-        MAP | MAP_CLEAR | UNMAP | SORT | REGISTERS | CMD | H_LOWERCASE | HELP
+        MAP | MAP_CLEAR | UNMAP | SORT | REGISTERS | CMD | H_LOWERCASE | HELP | NORMAL
       )
     WS* commandArgumentWithoutBars? (NEW_LINE | BAR)+
     #CommandWithoutComments|
 
     (WS | COLON)* range? (WS | COLON)*
       name = (
-        G_LOWERCASE | GLOBAL | V_LOWERCASE | V_GLOBAL | S_LOWERCASE | SUBSTITUTE | TILDE | AMPERSAND
+        G_LOWERCASE | GLOBAL | V_LOWERCASE | V_GLOBAL | S_LOWERCASE | SUBSTITUTE | TILDE | AMPERSAND | EXCLAMATION
       )
     WS* commandArgumentWithBars? NEW_LINE+
     #CommandWithBars|
@@ -156,7 +160,7 @@ range:
     rangeUnit+;
 
 rangeUnit:
-    (rangeExpression? rangeSeparator) | (rangeExpression rangeSeparator?);
+    (rangeExpression? WS* rangeSeparator WS*) | (rangeExpression WS* rangeSeparator? WS*);
 
 rangeExpression:
     (rangeMember rangeOffset?) | (rangeMember? rangeOffset);
@@ -183,13 +187,7 @@ minusOneOffset:
 commandName:
     (LESS)+
 |   (GREATER)+
-|   lowercaseAlphabeticChar
-|   uppercaseAlphabeticChar
-|   IDENTIFIER_LOWERCASE
-|   IDENTIFIER_ANY_CASE
-|   IDENTIFIER_LOWERCASE_WITH_DIGITS
-|   IDENTIFIER_ANY_CASE_WITH_DIGITS
-|   IDENTIFIER_ANY_CASE_WITH_DIGITS_AND_UNDERSCORES
+|   anyCaseNameWithDigitsAndUnderscoresExceptKeywords
 |   commandName EXCLAMATION
 ;
 
@@ -200,8 +198,9 @@ commandName:
 //  Expressions related rules
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-expr:                   WS* EXCLAMATION WS* expr                                                                        #UnaryExpression
-                    |   expr L_BRACKET expr R_BRACKET                                                                   #OneElementSublistExpression
+expr:
+                        expr L_BRACKET expr R_BRACKET                                                                   #OneElementSublistExpression
+                    |   WS* EXCLAMATION WS* expr                                                                        #UnaryExpression
                     |   expr L_BRACKET WS* from = expr? WS* COLON WS* to = expr? WS* R_BRACKET                          #SublistExpression
                     |   expr WS* binaryOperator1 WS* expr                                                               #BinExpression1
                     |   expr WS* binaryOperator2 WS* expr                                                               #BinExpression2
@@ -246,13 +245,16 @@ binaryOperator3:        LESS | LESS_IC | LESS_CS
 binaryOperator4:        AMPERSAND AMPERSAND;
 binaryOperator5:        LOGICAL_OR;
 
-register:               AT (DIGIT | lowercaseAlphabeticChar | uppercaseAlphabeticChar | MINUS | COLON | DOT | MOD | NUM | ASSIGN | STAR | PLUS | TILDE | UNDERSCORE | DIV | AT);
+register:               AT (DIGIT | lowercaseAlphabeticChar | uppercaseAlphabeticChar | MINUS | COLON | DOT | MOD | NUM | ASSIGN | STAR | PLUS | TILDE | UNDERSCORE | DIV | AT | QUOTE);
 // todo argumentDeclaration but without default values
 lambda:                 L_CURLY WS* argumentsDeclaration WS* ARROW WS* expr WS* R_CURLY;
 
 variable:               (variableScope COLON)? variableName;
-variableName:           anyCaseNameWithDigitsAndUnderscores | unsignedInt;
+variableName:           curlyBracesName;
 variableScope:          anyScope;
+
+curlyBracesName:        element+;
+element:                anyCaseNameWithDigitsAndUnderscores | unsignedInt | L_CURLY WS* expr WS* R_CURLY;
 
 option:                 AMPERSAND (optionScope COLON)? optionName;
 optionName:             anyCaseNameWithDigitsAndUnderscores;
@@ -262,7 +264,7 @@ envVariable:            DOLLAR envVariableName;
 envVariableName:        anyCaseNameWithDigitsAndUnderscores;
 
 functionCall:           (functionScope COLON)? (anyCaseNameWithDigitsAndUnderscores NUM)* functionName WS* L_PAREN WS* functionArguments WS* R_PAREN;
-functionName:           anyCaseNameWithDigitsAndUnderscores;
+functionName:           curlyBracesName;
 functionScope:          anyScope;
 functionArguments:      (functionArgument WS* (COMMA WS* functionArgument WS*)*)?;
 functionArgument:       expr | (anyScope COLON);
@@ -302,14 +304,16 @@ string:
                         QUOTE ~(NEW_LINE | QUOTE)* QUOTE
                     |   ESCAPED_SINGLE_QUOTE
                     |   ESCAPED_SINGLE_QUOTE ESCAPED_SINGLE_QUOTE
-                    |   (SINGLE_QUOTE | (ESCAPED_SINGLE_QUOTE SINGLE_QUOTE))  ~(SINGLE_QUOTE | NEW_LINE)*? SINGLE_QUOTE
+                    |   (SINGLE_QUOTE | MARK_SINGLE_QUOTED | (ESCAPED_SINGLE_QUOTE SINGLE_QUOTE))  ~(SINGLE_QUOTE | NEW_LINE)*? SINGLE_QUOTE
 ;
 unsignedFloat:          FLOAT;
 unsignedInt:            DIGIT | INT;
 blob:                   BLOB;
 
-mark:                   (SINGLE_QUOTE (lowercaseAlphabeticChar | uppercaseAlphabeticChar | DIGIT | LESS | GREATER | L_PAREN | R_PAREN | L_CURLY | R_CURLY | L_BRACKET | R_BRACKET | QUOTE | CARET | DOT | BACKTICK | SINGLE_QUOTE))
-                    |   (BACKTICK (lowercaseAlphabeticChar | uppercaseAlphabeticChar | DIGIT | LESS | GREATER | L_PAREN | R_PAREN | L_CURLY | R_CURLY | L_BRACKET | R_BRACKET | QUOTE | CARET | DOT | BACKTICK | SINGLE_QUOTE))
+mark:                   (SINGLE_QUOTE (DIGIT | LESS | GREATER | L_PAREN | R_PAREN | L_CURLY | R_CURLY | L_BRACKET | R_BRACKET | QUOTE | CARET | DOT | BACKTICK | SINGLE_QUOTE))
+                    |   (BACKTICK (DIGIT | LESS | GREATER | L_PAREN | R_PAREN | L_CURLY | R_CURLY | L_BRACKET | R_BRACKET | QUOTE | CARET | DOT | BACKTICK | SINGLE_QUOTE))
+                    |   MARK_SINGLE_QUOTED
+                    |   MARK_BACKTICK
 ;
 inline_comment:         QUOTE ~(NEW_LINE)*?;
 anyCaseNameWithDigitsAndUnderscores:
@@ -318,9 +322,15 @@ anyCaseNameWithDigitsAndUnderscores:
                     |   keyword
                     |   IDENTIFIER_LOWERCASE
                     |   IDENTIFIER_ANY_CASE
-                    |   IDENTIFIER_LOWERCASE_WITH_DIGITS
-                    |   IDENTIFIER_ANY_CASE_WITH_DIGITS
-                    |   IDENTIFIER_ANY_CASE_WITH_DIGITS_AND_UNDERSCORES
+                    |   anyCaseNameWithDigitsAndUnderscores (anyCaseNameWithDigitsAndUnderscores | DIGIT | INT | UNDERSCORE)+
+;
+
+anyCaseNameWithDigitsAndUnderscoresExceptKeywords:
+                        lowercaseAlphabeticChar
+                    |   uppercaseAlphabeticChar
+                    |   IDENTIFIER_LOWERCASE
+                    |   IDENTIFIER_ANY_CASE
+                    |   anyCaseNameWithDigitsAndUnderscores (anyCaseNameWithDigitsAndUnderscores | DIGIT | INT | UNDERSCORE)+
 ;
 
 uppercaseAlphabeticChar:
@@ -402,6 +412,8 @@ keyword:                FUNCTION
                     |   ABORT
                     |   DICT
                     |   CLOSURE
+                    |   AUTOCMD
+                    |   AUGROUP
                     |   existingCommands
 ;
 existingCommands:       RETURN
@@ -442,6 +454,7 @@ existingCommands:       RETURN
                     |   NEXT_TAB
                     |   NO_HL_SEARCH
                     |   ONLY
+                    |   PACKADD
                     |   PLUG
                     |   PREVIOUS_FILE
                     |   PREVIOUS_TAB
@@ -456,6 +469,7 @@ existingCommands:       RETURN
                     |   SELECT_FIRST_FILE
                     |   SELECT_LAST_FILE
                     |   SET
+                    |   SETLOCAL
                     |   SET_HANDLER
                     |   SHELL
                     |   SORT
@@ -477,6 +491,8 @@ existingCommands:       RETURN
                     |   UNMAP
                     |   EXECUTE
                     |   CALL
+                    |   NORMAL
+                    |   TABMOVE
 ;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -539,6 +555,9 @@ X_UPPERCASE:            'X';
 Y_UPPERCASE:            'Y';
 Z_UPPERCASE:            'Z';
 
+MARK_SINGLE_QUOTED:     '\''[a-zA-Z];
+MARK_BACKTICK:          '`'[a-zA-Z];
+
 // Keywords
 FUNCTION:               'fu' | 'fun' | 'func' | 'funct' | 'functi' | 'functio' | 'function';
 ENDFUNCTION:            'endf' | 'endfu' | 'endfun' | 'endfunc' | 'endfunct' | 'endfuncti' | 'endfunctio' | 'endfunction';
@@ -551,6 +570,7 @@ ENDFOR:                 'endfo' | 'endfor';
 IN:                     'in';
 BREAK:                  'brea' | 'break';
 CONTINUE:               'con' | 'cont' | 'conti' | 'contin' | 'continu' | 'continue';
+FINISH:                 'fini' | 'finis' | 'finish';
 RETURN:                 'return';
 WHILE:                  'wh' | 'whi' | 'whil' | 'while';
 ENDWHILE:               'endw' | 'endwh' | 'endwhi' | 'endwhil' |'endwhile';
@@ -606,6 +626,7 @@ NEXT_FILE:              'ne' | 'nex' | 'next' | 'bn' | 'bne' | 'bnex' | 'bnext';
 NEXT_TAB:               'tabn' | 'tabne' | 'tabnex' | 'tabnext';
 NO_HL_SEARCH:           'noh' | 'nohl' | 'nohls' | 'nohlse' | 'nohlsea' | 'nohlsear' | 'nohlsearc' | 'nohlsearch';
 ONLY:                   'on' | 'onl' | 'only';
+PACKADD:                'pa' | 'pac' | 'pack' | 'packa' | 'packad' | 'packadd';
 PLUG:                   'Plug' | 'Plugi' | 'Plugin';
 PREVIOUS_FILE:          'Ne' | 'Nex' | 'Next' | 'prev'| 'previ' | 'previo' | 'previou' | 'previous' | 'bp' | 'bpr' | 'bpre' |'bprev'| 'bprevi' | 'bprevio' | 'bpreviou' | 'bprevious';
 PREVIOUS_TAB:           'tabp' | 'tabpr' | 'tabpre' | 'tabprev' | 'tabprevi' | 'tabprevio' | 'tabpreviou' | 'tabprevious' | 'tabN' | 'tabNe' | 'tabNex' | 'tabNext';
@@ -621,7 +642,8 @@ V_GLOBAL:               'vg' | 'vgl' | 'vglo' | 'vglob' | 'vgloba' | 'vglobal';
 SELECT_FILE:            'argu' | 'argum' | 'argume' | 'argumen' | 'argument';
 SELECT_FIRST_FILE:      'fir' | 'firs' | 'first';
 SELECT_LAST_FILE:       'la' | 'las' | 'last';
-SET:                    'set';
+SET:                    'se' | 'set';
+SETLOCAL:               'setl' | 'setlo' | 'setloc' | 'setloca' | 'setlocal';
 SET_HANDLER:            'sethandler';
 SHELL:                  'sh' | 'she' | 'shel' | 'shell';
 SORT:                   'sor' | 'sort';
@@ -660,6 +682,10 @@ UNMAP:                  'unm' | 'nun' | 'vu' | 'xu' | 'sunm' | 'ou' | 'iu' | 'cu
                     |   'unma' | 'nunma' | 'vunma' | 'xunma' | 'sunma' | 'ounma' | 'iunma' | 'cunma'
                     |   'unmap' | 'nunmap' | 'vunmap' | 'xunmap' | 'sunmap' | 'ounmap' | 'iunmap' | 'cunmap';
 EXECUTE:                'exe' | 'exec' | 'execu' | 'execut' | 'execute';
+LOCKVAR:                'lockv' | 'lockva' | 'lockvar';
+UNLOCKVAR:              'unlo' | 'unloc' | 'unlock' | 'unlockv' | 'unlockva' | 'unlockvar';
+NORMAL:                 'norm' | 'norma' | 'normal';
+TABMOVE:                'tabm' | 'tabmo' | 'tabmov' | 'tabmove';
 
 // Types
 DIGIT:                  [0-9];
@@ -677,9 +703,6 @@ ESCAPED_DOUBLE_QUOTE:   '\\"';
 // Identifiers
 IDENTIFIER_LOWERCASE:   [a-z]+;
 IDENTIFIER_ANY_CASE:    [a-zA-Z]+;
-IDENTIFIER_LOWERCASE_WITH_DIGITS:   [a-z][a-z0-9]+;
-IDENTIFIER_ANY_CASE_WITH_DIGITS:    [a-zA-Z][a-zA-Z0-9]+;
-IDENTIFIER_ANY_CASE_WITH_DIGITS_AND_UNDERSCORES: [a-zA-Z_][a-zA-Z0-9_]+;
 
 // Unary operators
 EXCLAMATION:            '!';
@@ -780,8 +803,7 @@ INLINE_SEPARATOR:       '\n' (' ' | '\t')* BACKSLASH -> skip;
 LUA_CODE:               'lua' WS* '<<' WS* 'EOF' .*? 'EOF' -> skip;
 LUA_CODE2:              'lua' WS* '<<' WS* 'END' .*? 'END' -> skip;
 IDEAVIM_IGNORE:         ('ideavim' | 'ideaVim' | 'IdeaVim') WS 'ignore' .*? ('ideavim' | 'ideaVim' | 'IdeaVim') WS 'ignore end' -> skip;
-COMMENT:                '\n' WS* QUOTE ~('\n' | '\r')* -> skip;
-AUGROUP_SKIP:           WS* AUGROUP .*? AUGROUP WS+ END -> skip;
+AUGROUP_SKIP:           NEW_LINE (WS|COLON)* AUGROUP .*? AUGROUP WS+ END -> skip;
 
 // All the other symbols
 UNICODE_CHAR:           '\u0000'..'\uFFFE';

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -648,5 +648,79 @@ class FunctionDeclarationTest : VimTestCase() {
     assertExOutput("{'a': 100, 'b': 200, '000': [300]}\n")
 
     typeText(commandToKeys("delfunction! GetOptionalArgs"))
+  }
+
+  fun `test finish statement in function`() {
+    configureByText("\n")
+    typeText(
+      commandToKeys(
+        """
+        let x = 3 |
+        function! F() |
+          finish |
+          let g:x = 10 |
+        endfunction |
+        """.trimIndent()
+      )
+    )
+    typeText(commandToKeys("call F()"))
+    typeText(commandToKeys("echo x"))
+    assertExOutput("3\n")
+
+    typeText(commandToKeys("delfunction! F"))
+  }
+
+  fun `test args are passed to function by reference`() {
+    configureByText("\n")
+    typeText(
+      commandToKeys(
+        """
+        function! AddNumbers(dict) |
+          let a:dict.one = 1 |
+          let a:dict['two'] = 2 |
+        endfunction
+        """.trimIndent()
+      )
+    )
+    typeText(commandToKeys("let d = {}"))
+    typeText(commandToKeys("call AddNumbers(d)"))
+    typeText(commandToKeys("echo d"))
+    assertPluginError(false)
+    assertExOutput("{'one': 1, 'two': 2}\n")
+
+    typeText(commandToKeys("delfunction! AddNumbers"))
+  }
+
+  @TestWithoutNeovim(reason = SkipNeovimReason.PLUGIN_ERROR)
+  fun `test define script function in command line context`() {
+    configureByText("\n")
+    typeText(
+      commandToKeys(
+        "" +
+          "function s:GetHiString(name) |" +
+          "  return 'Oh hi ' . a:name | " +
+          "endfunction"
+      )
+    )
+    assertPluginError(true)
+    assertPluginErrorMessageContains("E81: Using <SID> not in a script context")
+  }
+
+  @TestWithoutNeovim(reason = SkipNeovimReason.PLUGIN_ERROR)
+  fun `test get script function in command line context`() {
+    configureByText("\n")
+    typeText(
+      commandToKeys("echo s:F1()")
+    )
+    assertPluginError(true)
+    assertPluginErrorMessageContains("E120: Using <SID> not in a script context: s:F1")
+  }
+
+  @TestWithoutNeovim(reason = SkipNeovimReason.PLUGIN_ERROR)
+  fun `test get built-in function with global scope`() {
+    configureByText("\n")
+    typeText(commandToKeys("echo g:abs(-10)"))
+    assertPluginError(true)
+    assertPluginErrorMessageContains("E117: Unknown function: g:abs")
   }
 }

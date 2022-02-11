@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 package com.maddyhome.idea.vim.handler
 
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.ReadOnlyFragmentModificationException
@@ -28,6 +29,7 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.action.change.VimRepeater
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.helper.vimChangeActionSwitchMode
 import com.maddyhome.idea.vim.helper.vimLastColumn
 
@@ -51,9 +53,8 @@ sealed class ChangeEditorActionHandler : EditorActionHandlerBase(false) {
       editor: Editor,
       caret: Caret,
       context: DataContext,
-      count: Int,
-      rawCount: Int,
       argument: Argument?,
+      operatorArguments: OperatorArguments,
     ): Boolean
   }
 
@@ -63,10 +64,21 @@ sealed class ChangeEditorActionHandler : EditorActionHandlerBase(false) {
    * @see [ChangeEditorActionHandler.ForEachCaret] for per-caret execution
    */
   abstract class SingleExecution : ChangeEditorActionHandler() {
-    abstract fun execute(editor: Editor, context: DataContext, count: Int, rawCount: Int, argument: Argument?): Boolean
+    abstract fun execute(
+      editor: Editor,
+      context: DataContext,
+      argument: Argument?,
+      operatorArguments: OperatorArguments,
+    ): Boolean
   }
 
-  final override fun baseExecute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean {
+  final override fun baseExecute(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    cmd: Command,
+    operatorArguments: OperatorArguments,
+  ): Boolean {
     // Here we have to save the last changed command. This should be done separately for each
     // call of the task, not for each caret. Currently there is no way to schedule any action
     // to be worked after each task. So here we override the deprecated execute function which
@@ -85,7 +97,7 @@ sealed class ChangeEditorActionHandler : EditorActionHandlerBase(false) {
           editor.caretModel.runForEachCaret(
             { current ->
               if (!current.isValid) return@runForEachCaret
-              if (!execute(editor, current, context, cmd.count, cmd.rawCount, cmd.argument)) {
+              if (!execute(editor, current, context, cmd.argument, operatorArguments)) {
                 worked.set(false)
               }
             },
@@ -93,11 +105,15 @@ sealed class ChangeEditorActionHandler : EditorActionHandlerBase(false) {
           )
         }
         is SingleExecution -> {
-          worked.set(execute(editor, context, cmd.count, cmd.rawCount, cmd.argument))
+          worked.set(execute(editor, context, cmd.argument, operatorArguments))
         }
       }
     } catch (e: ReadOnlyFragmentModificationException) {
-      EditorActionManager.getInstance().getReadonlyFragmentModificationHandler(doc).handle(e)
+      if (ApplicationManager.getApplication().isUnitTestMode) {
+        throw e
+      } else {
+        EditorActionManager.getInstance().getReadonlyFragmentModificationHandler(doc).handle(e)
+      }
     } finally {
       doc.stopGuardedBlockChecking()
     }

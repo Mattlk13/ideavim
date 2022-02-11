@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -154,9 +154,10 @@ class VimExchangeExtension : VimExtension {
           // TODO: handle other modes
           else -> HighlighterTargetArea.EXACT_RANGE
         }
+        val endAdj = if (hlArea == HighlighterTargetArea.EXACT_RANGE || (isVisual)) 1 else 0
         return editor.markupModel.addRangeHighlighter(
           editor.getMarkOffset(ex.start),
-          (editor.getMarkOffset(ex.end) + 1).coerceAtMost(editor.fileSize),
+          (editor.getMarkOffset(ex.end) + endAdj).coerceAtMost(editor.fileSize),
           HighlighterLayer.SELECTION - 1,
           attributes,
           hlArea

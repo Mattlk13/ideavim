@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,20 +18,21 @@
 package com.maddyhome.idea.vim.extension
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.action.change.VimRepeater
 import com.maddyhome.idea.vim.command.MappingMode
 import com.maddyhome.idea.vim.command.SelectionType
+import com.maddyhome.idea.vim.helper.CommandLineHelper
 import com.maddyhome.idea.vim.helper.EditorDataContext
-import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.helper.TestInputModel
 import com.maddyhome.idea.vim.helper.commandState
 import com.maddyhome.idea.vim.key.MappingOwner
 import com.maddyhome.idea.vim.key.OperatorFunction
+import com.maddyhome.idea.vim.newapi.vim
 import com.maddyhome.idea.vim.ui.ModalEntry
-import com.maddyhome.idea.vim.ui.ex.ExEntryPanel
 import java.awt.event.KeyEvent
 import javax.swing.KeyStroke
 
@@ -42,6 +43,7 @@ import javax.swing.KeyStroke
  *
  * @author vlan
  */
+@SuppressWarnings("deprecation") // [VERSION UPDATE] 212+ getService
 object VimExtensionFacade {
   /** The 'map' command for mapping keys to handlers defined in extensions. */
   @JvmStatic
@@ -96,7 +98,7 @@ object VimExtensionFacade {
   @JvmStatic
   fun executeNormalWithoutMapping(keys: List<KeyStroke>, editor: Editor) {
     val context = EditorDataContext.init(editor)
-    keys.forEach { KeyHandler.getInstance().handleKey(editor, it, context, false, false) }
+    keys.forEach { KeyHandler.getInstance().handleKey(editor.vim, it, context.vim, false, false) }
   }
 
   /** Returns a single key stroke from the user input similar to 'getchar()'. */
@@ -125,61 +127,7 @@ object VimExtensionFacade {
   /** Returns a string typed in the input box similar to 'input()'. */
   @JvmStatic
   fun inputString(editor: Editor, prompt: String, finishOn: Char?): String {
-    if (editor.commandState.isDotRepeatInProgress) {
-      val input = VimRepeater.Extension.consumeString()
-      return input ?: error("Not enough strings saved: ${VimRepeater.Extension.lastExtensionHandler}")
-    }
-
-    if (ApplicationManager.getApplication().isUnitTestMode) {
-      val builder = StringBuilder()
-      val inputModel = TestInputModel.getInstance(editor)
-      var key: KeyStroke? = inputModel.nextKeyStroke()
-      while (key != null &&
-        !StringHelper.isCloseKeyStroke(key) && key.keyCode != KeyEvent.VK_ENTER &&
-        (finishOn == null || key.keyChar != finishOn)
-      ) {
-        val c = key.keyChar
-        if (c != KeyEvent.CHAR_UNDEFINED) {
-          builder.append(c)
-        }
-        key = inputModel.nextKeyStroke()
-      }
-      if (finishOn != null && key != null && key.keyChar == finishOn) {
-        builder.append(key.keyChar)
-      }
-      VimRepeater.Extension.addString(builder.toString())
-      return builder.toString()
-    } else {
-      var text = ""
-      // XXX: The Ex entry panel is used only for UI here, its logic might be inappropriate for input()
-      val exEntryPanel = ExEntryPanel.getInstanceWithoutShortcuts()
-      exEntryPanel.activate(editor, EditorDataContext.init(editor), prompt.ifEmpty { " " }, "", 1)
-      ModalEntry.activate { key: KeyStroke ->
-        return@activate when {
-          StringHelper.isCloseKeyStroke(key) -> {
-            exEntryPanel.deactivate(true)
-            false
-          }
-          key.keyCode == KeyEvent.VK_ENTER -> {
-            text = exEntryPanel.text
-            exEntryPanel.deactivate(true)
-            false
-          }
-          finishOn != null && key.keyChar == finishOn -> {
-            exEntryPanel.handleKey(key)
-            text = exEntryPanel.text
-            exEntryPanel.deactivate(true)
-            false
-          }
-          else -> {
-            exEntryPanel.handleKey(key)
-            true
-          }
-        }
-      }
-      VimRepeater.Extension.addString(text)
-      return text
-    }
+    return ServiceManager.getService(CommandLineHelper::class.java).inputString(editor, prompt, finishOn) ?: ""
   }
 
   /** Get the current contents of the given register similar to 'getreg()'. */

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,9 @@ import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.command.CommandState;
 import com.maddyhome.idea.vim.common.Register;
 import com.maddyhome.idea.vim.ex.ExException;
-import com.maddyhome.idea.vim.option.OptionsManager;
-import com.maddyhome.idea.vim.option.StringListOption;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
 import org.jetbrains.plugins.ideavim.SkipNeovimReason;
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim;
 import org.jetbrains.plugins.ideavim.VimTestCase;
@@ -138,9 +139,7 @@ public class CopyActionTest extends VimTestCase {
   // This doesn't use the system clipboard, but the TestClipboardModel
   public void testClipboardUnnamed() throws ExException {
     assertEquals('\"', VimPlugin.getRegister().getDefaultRegister());
-    final StringListOption clipboardOption = OptionsManager.INSTANCE.getClipboard();
-    assertNotNull(clipboardOption);
-    clipboardOption.set("unnamed");
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.clipboardName, new VimString("unnamed"), OptionConstants.clipboardName);
     assertEquals('*', VimPlugin.getRegister().getDefaultRegister());
     typeTextInFile(parseKeys("yy"), "foo\n" + "<caret>bar\n" + "baz\n");
     final Register starRegister = VimPlugin.getRegister().getRegister('*');

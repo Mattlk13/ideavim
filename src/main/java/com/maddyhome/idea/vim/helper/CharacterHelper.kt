@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  */
 package com.maddyhome.idea.vim.helper
 
-import com.maddyhome.idea.vim.option.OptionsManager.iskeyword
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.KeywordOptionHelper
 import java.lang.Character.UnicodeBlock
 
 /**
@@ -52,7 +52,7 @@ object CharacterHelper {
       CharacterType.HALF_WIDTH_KATAKANA
     } else if (block == UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS) {
       CharacterType.CJK_UNIFIED_IDEOGRAPHS
-    } else if (punctuationAsLetters || iskeyword.isKeyword(ch)) {
+    } else if (punctuationAsLetters || KeywordOptionHelper.isKeyword(ch)) {
       CharacterType.KEYWORD
     } else {
       CharacterType.PUNCTUATION

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,10 +34,13 @@ import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.command.CommandState;
 import com.maddyhome.idea.vim.common.CharacterPosition;
 import com.maddyhome.idea.vim.common.TextRange;
-import com.maddyhome.idea.vim.option.OptionsManager;
-import com.maddyhome.idea.vim.option.StringListOption;
 import com.maddyhome.idea.vim.regexp.CharPointer;
 import com.maddyhome.idea.vim.regexp.RegExp;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType;
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
+import com.maddyhome.idea.vim.vimscript.model.options.OptionChangeListener;
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants;
+import com.maddyhome.idea.vim.vimscript.services.OptionService;
 import kotlin.Pair;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -465,6 +468,9 @@ public class SearchHelper {
     char match = blockChars.charAt(loc);
     char found = blockChars.charAt(loc - dir.toInt());
 
+    if (pos < chars.length() && chars.charAt(pos) == type) {
+      pos += dir.toInt();
+    }
     return findBlockLocation(chars, found, match, dir, pos, count, false);
   }
 
@@ -2613,15 +2619,26 @@ public class SearchHelper {
 
   private static @NotNull String getPairChars() {
     if (pairsChars == null) {
-      StringListOption lo = OptionsManager.INSTANCE.getMatchpairs();
-      lo.addOptionChangeListenerAndExecute((oldValue, newValue) -> pairsChars = parseOption(lo));
+      VimPlugin.getOptionService().addListener(
+        OptionConstants.matchpairsName,
+        new OptionChangeListener<VimDataType>() {
+          @Override
+          public void processGlobalValueChange(@Nullable VimDataType oldValue) {
+            pairsChars = parseMatchPairsOption();
+          }
+        },
+        true
+      );
     }
 
     return pairsChars;
   }
 
-  private static @NotNull String parseOption(@NotNull StringListOption option) {
-    List<String> vals = option.values();
+  private static @NotNull String parseMatchPairsOption() {
+    String[] vals = ((VimString) VimPlugin.getOptionService()
+      .getOptionValue(OptionService.Scope.GLOBAL.INSTANCE, OptionConstants.matchpairsName, OptionConstants.matchpairsName))
+      .getValue()
+      .split(",");
     StringBuilder res = new StringBuilder();
     for (String s : vals) {
       if (s.length() == 3) {

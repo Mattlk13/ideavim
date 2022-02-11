@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.helper.commandState
+import com.maddyhome.idea.vim.newapi.vim
 import org.jetbrains.jetCheck.Generator
 import org.jetbrains.jetCheck.ImperativeCommand
 import org.jetbrains.plugins.ideavim.VimTestCase
@@ -38,7 +39,7 @@ abstract class VimPropertyTest : VimTestCase() {
     editor.commandState.mappingState.resetMappingSequence()
     VimPlugin.getKey().resetKeyMappings()
 
-    KeyHandler.getInstance().fullReset(editor)
+    KeyHandler.getInstance().fullReset(editor.vim)
     VimPlugin.getRegister().resetRegisters()
     editor.caretModel.runForEachCaret { it.moveToOffset(0) }
 

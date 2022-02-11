@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,14 +21,15 @@ package org.jetbrains.plugins.ideavim.ex.implementation.commands;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.util.ArrayUtil;
 import com.maddyhome.idea.vim.ex.ExOutputModel;
+import org.jetbrains.annotations.NonNls;
 import org.jetbrains.plugins.ideavim.VimTestCase;
+
+import java.util.List;
 
 /**
  * @author Naoto Ikeno
  */
 public class ActionListCommandTest extends VimTestCase {
-  // [VERSION UPDATE] 203+
-  @SuppressWarnings("deprecation")
   public void testListAllActions() {
     configureByText("\n");
     typeText(commandToKeys("actionlist"));
@@ -42,8 +43,8 @@ public class ActionListCommandTest extends VimTestCase {
 
     // Action lines
     int displayedActionNum = displayedLines.length - 1;
-    String[] actionIds = ActionManager.getInstance().getActionIds("");
-    assertEquals(displayedActionNum, actionIds.length);
+    List<@NonNls String> actionIds = ActionManager.getInstance().getActionIdList("");
+    assertEquals(displayedActionNum, actionIds.size());
   }
 
   public void testSearchByActionName() {

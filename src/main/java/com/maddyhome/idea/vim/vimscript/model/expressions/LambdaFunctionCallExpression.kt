@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,13 +20,13 @@ package com.maddyhome.idea.vim.vimscript.model.expressions
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
-import com.maddyhome.idea.vim.vimscript.model.Executable
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
 
 class LambdaFunctionCallExpression(val lambda: LambdaExpression, val arguments: List<Expression>) : Expression() {
 
-  override fun evaluate(editor: Editor, context: DataContext, parent: Executable): VimDataType {
-    val funcref = lambda.evaluate(editor, context, parent)
-    return funcref.execute("", arguments, editor, context, parent)
+  override fun evaluate(editor: Editor, context: DataContext, vimContext: VimLContext): VimDataType {
+    val funcref = lambda.evaluate(editor, context, vimContext)
+    return funcref.execute("", arguments, editor, context, vimContext)
   }
 }

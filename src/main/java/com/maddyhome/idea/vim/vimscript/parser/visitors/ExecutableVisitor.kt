@@ -1,9 +1,24 @@
+/*
+ * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
+ * Copyright (C) 2003-2022 The IdeaVim authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.maddyhome.idea.vim.vimscript.parser.visitors
 
 import com.maddyhome.idea.vim.vimscript.model.Executable
-import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
-import com.maddyhome.idea.vim.vimscript.model.datatypes.VimList
-import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression
 import com.maddyhome.idea.vim.vimscript.model.expressions.OneElementSublistExpression
 import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
@@ -12,6 +27,7 @@ import com.maddyhome.idea.vim.vimscript.model.expressions.Variable
 import com.maddyhome.idea.vim.vimscript.model.statements.AnonymousFunctionDeclaration
 import com.maddyhome.idea.vim.vimscript.model.statements.CatchBlock
 import com.maddyhome.idea.vim.vimscript.model.statements.FinallyBlock
+import com.maddyhome.idea.vim.vimscript.model.statements.FinishStatement
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionDeclaration
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionFlag
 import com.maddyhome.idea.vim.vimscript.model.statements.IfStatement
@@ -22,6 +38,7 @@ import com.maddyhome.idea.vim.vimscript.model.statements.TryStatement
 import com.maddyhome.idea.vim.vimscript.model.statements.loops.BreakStatement
 import com.maddyhome.idea.vim.vimscript.model.statements.loops.ContinueStatement
 import com.maddyhome.idea.vim.vimscript.model.statements.loops.ForLoop
+import com.maddyhome.idea.vim.vimscript.model.statements.loops.ForLoopWithList
 import com.maddyhome.idea.vim.vimscript.model.statements.loops.WhileLoop
 import com.maddyhome.idea.vim.vimscript.parser.generated.VimscriptBaseVisitor
 import com.maddyhome.idea.vim.vimscript.parser.generated.VimscriptParser
@@ -33,6 +50,7 @@ object ExecutableVisitor : VimscriptBaseVisitor<Executable>() {
       ctx.command() != null -> CommandVisitor.visit(ctx.command())
       ctx.breakStatement() != null -> BreakStatement
       ctx.continueStatement() != null -> ContinueStatement
+      ctx.finishStatement() != null -> FinishStatement
       ctx.returnStatement() != null -> ReturnStatement(ExpressionVisitor.visit(ctx.returnStatement().expr()))
       ctx.ifStatement() != null -> visitIfStatement(ctx.ifStatement())
       ctx.forLoop() != null -> visitForLoop(ctx.forLoop())
@@ -51,11 +69,15 @@ object ExecutableVisitor : VimscriptBaseVisitor<Executable>() {
   }
 
   override fun visitForLoop(ctx: VimscriptParser.ForLoopContext): Executable {
-    if (ctx.argumentsDeclaration() != null) return ForLoop("", SimpleExpression(VimList(mutableListOf())), listOf(), false)
-    val variableName = ctx.variableName().text
     val iterable = ExpressionVisitor.visit(ctx.expr())
     val body = ctx.blockMember().mapNotNull { visitBlockMember(it) }
-    return ForLoop(variableName, iterable, body, true)
+    return if (ctx.argumentsDeclaration() == null) {
+      val variable = Variable(Scope.getByValue(ctx.variableScope()?.text ?: ""), ctx.variableName().text)
+      ForLoop(variable, iterable, body)
+    } else {
+      val variables = ctx.argumentsDeclaration().variableName().map { it.text }
+      ForLoopWithList(variables, iterable, body)
+    }
   }
 
   override fun visitFunctionDefinition(ctx: VimscriptParser.FunctionDefinitionContext): Executable {
@@ -74,9 +96,9 @@ object ExecutableVisitor : VimscriptBaseVisitor<Executable>() {
       val functionName = ctx.functionName().text
       FunctionDeclaration(functionScope, functionName, args, defaultArgs, body, replaceExisting, flags.filterNotNull().toSet(), hasOptionalArguments)
     } else {
-      var sublistExpression = OneElementSublistExpression(SimpleExpression(VimString(ctx.literalDictionaryKey(1).text)), Variable(functionScope, ctx.literalDictionaryKey(0).text))
+      var sublistExpression = OneElementSublistExpression(SimpleExpression(ctx.literalDictionaryKey(1).text), Variable(functionScope, ctx.literalDictionaryKey(0).text))
       for (i in 2 until ctx.literalDictionaryKey().size) {
-        sublistExpression = OneElementSublistExpression(SimpleExpression(VimString(ctx.literalDictionaryKey(i).text)), sublistExpression)
+        sublistExpression = OneElementSublistExpression(SimpleExpression(ctx.literalDictionaryKey(i).text), sublistExpression)
       }
       AnonymousFunctionDeclaration(sublistExpression, args, defaultArgs, body, replaceExisting, flags.filterNotNull().toSet(), hasOptionalArguments)
     }
@@ -125,7 +147,7 @@ object ExecutableVisitor : VimscriptBaseVisitor<Executable>() {
     }
     if (ctx.elseBlock() != null) {
       conditionToBody.add(
-        SimpleExpression(VimInt(1)) to ctx.elseBlock().blockMember()
+        SimpleExpression(1) to ctx.elseBlock().blockMember()
           .mapNotNull { visitBlockMember(it) }
       )
     }

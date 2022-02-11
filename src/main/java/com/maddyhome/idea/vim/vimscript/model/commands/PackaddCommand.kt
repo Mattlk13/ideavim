@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,32 +15,24 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.maddyhome.idea.vim.action.change.insert
+
+package com.maddyhome.idea.vim.vimscript.model.commands
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.VimPlugin
-import com.maddyhome.idea.vim.command.Argument
-import com.maddyhome.idea.vim.command.Command
-import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.handler.ChangeEditorActionHandler
-import com.maddyhome.idea.vim.helper.enumSetOf
-import java.util.*
+import com.maddyhome.idea.vim.ex.ranges.Ranges
+import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 
-class InsertNewLineAboveAction : ChangeEditorActionHandler.SingleExecution() {
-  override val type: Command.Type = Command.Type.INSERT
+// Currently support only matchit
+class PackaddCommand(val ranges: Ranges, val argument: String) : Command.SingleExecution(ranges, argument) {
+  override val argFlags = flags(RangeFlag.RANGE_FORBIDDEN, ArgumentFlag.ARGUMENT_REQUIRED, Access.READ_ONLY)
 
-  override val flags: EnumSet<CommandFlags> = enumSetOf(CommandFlags.FLAG_MULTIKEY_UNDO)
-
-  override fun execute(
-    editor: Editor,
-    context: DataContext,
-    count: Int,
-    rawCount: Int,
-    argument: Argument?,
-  ): Boolean {
-    if (editor.isOneLineMode) return false
-    VimPlugin.getChange().insertNewLineAbove(editor, context)
-    return true
+  override fun processCommand(editor: Editor, context: DataContext): ExecutionResult {
+    if (argument == "matchit" || (argument.startsWith("!") && argument.drop(1).trim() == "matchit")) {
+      VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, "matchit")
+    }
+    return ExecutionResult.Success
   }
 }

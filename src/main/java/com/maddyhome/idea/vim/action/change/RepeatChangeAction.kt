@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,19 +20,20 @@ package com.maddyhome.idea.vim.action.change
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.editor.Editor
-import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.extension.VimExtensionHandler
 import com.maddyhome.idea.vim.handler.VimActionHandler
+import com.maddyhome.idea.vim.helper.VimActionExecutor
 import com.maddyhome.idea.vim.helper.commandState
 import javax.swing.KeyStroke
 
 class RepeatChangeAction : VimActionHandler.SingleExecution() {
   override val type: Command.Type = Command.Type.OTHER_WRITABLE
 
-  override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
+  override fun execute(editor: Editor, context: DataContext, cmd: Command, operatorArguments: OperatorArguments): Boolean {
     val state = editor.commandState
     val lastCommand = VimRepeater.lastChangeCommand
 
@@ -69,7 +70,8 @@ class RepeatChangeAction : VimActionHandler.SingleExecution() {
         }
         state.setExecutingCommand(lastCommand)
 
-        KeyHandler.executeVimAction(editor, lastCommand.action, context)
+        val arguments = operatorArguments.copy(count0 = lastCommand.rawCount)
+        VimActionExecutor.executeVimAction(editor, lastCommand.action, context, arguments)
 
         VimRepeater.saveLastChange(lastCommand)
       }

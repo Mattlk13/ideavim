@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ data class UnknownCommand(val ranges: Ranges, val name: String, val argument: St
             return if (parsedCommand is UnknownCommand) {
               processPossiblyAliasCommand(commandAlias.command, editor, context, aliasCountdown - 1)
             } else {
-              parsedCommand.parent = this.parent
+              parsedCommand.vimContext = this.vimContext
               parsedCommand.execute(editor, context)
               ExecutionResult.Success
             }

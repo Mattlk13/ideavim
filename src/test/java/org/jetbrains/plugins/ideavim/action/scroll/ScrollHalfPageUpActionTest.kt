@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,9 @@ package org.jetbrains.plugins.ideavim.action.scroll
 
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
@@ -67,6 +69,16 @@ class ScrollHalfPageUpActionTest : VimTestCase() {
   }
 
   @TestWithoutNeovim(SkipNeovimReason.SCROLL)
+  fun`test scroll upwards in first half of first page moves to first line with scrolloff`() {
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolloffName, VimInt(10))
+    configureByPages(5)
+    setPositionAndScroll(5, 15)
+    typeText(parseKeys("<C-U>"))
+    assertPosition(0, 0)
+    assertVisibleArea(0, 34)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.SCROLL)
   fun`test scroll count lines upwards`() {
     configureByPages(5)
     setPositionAndScroll(50, 53)
@@ -80,12 +92,12 @@ class ScrollHalfPageUpActionTest : VimTestCase() {
     configureByPages(5)
     setPositionAndScroll(50, 53)
     typeText(parseKeys("10<C-U>"))
-    assertEquals(OptionsManager.scroll.value(), 10)
+    assertEquals((VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrollName) as VimInt).value, 10)
   }
 
   @TestWithoutNeovim(SkipNeovimReason.SCROLL)
   fun`test scroll upwards uses scroll option`() {
-    OptionsManager.scroll.set(10)
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrollName, VimInt(10))
     configureByPages(5)
     setPositionAndScroll(50, 53)
     typeText(parseKeys("<C-U>"))
@@ -113,7 +125,7 @@ class ScrollHalfPageUpActionTest : VimTestCase() {
 
   @TestWithoutNeovim(SkipNeovimReason.SCROLL)
   fun`test scroll upwards keeps same column with nostartofline`() {
-    OptionsManager.startofline.reset()
+    VimPlugin.getOptionService().unsetOption(OptionService.Scope.GLOBAL, OptionConstants.startoflineName)
     configureByLines(100, "    I found it in a legendary land")
     setPositionAndScroll(50, 60, 14)
     typeText(parseKeys("<C-U>"))

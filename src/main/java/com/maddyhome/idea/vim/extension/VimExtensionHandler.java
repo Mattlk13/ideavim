@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ package com.maddyhome.idea.vim.extension;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.editor.Editor;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * An action handler registered by its extension to be executed as a Vim command.
@@ -42,5 +43,15 @@ public interface VimExtensionHandler {
 
   default boolean isRepeatable() {
     return false;
+  }
+
+  abstract class WithCallback implements VimExtensionHandler {
+    public @Nullable Runnable _backingFunction = null;
+
+    public void continueVimExecution() {
+      if (_backingFunction != null) {
+        _backingFunction.run();
+      }
+    }
   }
 }

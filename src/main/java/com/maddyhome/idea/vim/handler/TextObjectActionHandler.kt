@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@ import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandFlags
 import com.maddyhome.idea.vim.command.CommandState
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.command.TextObjectVisualType
 import com.maddyhome.idea.vim.common.TextRange
 import com.maddyhome.idea.vim.group.MotionGroup
@@ -65,7 +66,13 @@ abstract class TextObjectActionHandler : EditorActionHandlerBase(true) {
   /**
    * This code is called when user executes text object in visual mode. E.g. `va(a(a(`
    */
-  final override fun baseExecute(editor: Editor, caret: Caret, context: DataContext, cmd: Command): Boolean {
+  final override fun baseExecute(
+    editor: Editor,
+    caret: Caret,
+    context: DataContext,
+    cmd: Command,
+    operatorArguments: OperatorArguments,
+  ): Boolean {
     if (!editor.inVisualMode) return true
 
     val range = getRange(editor, caret, context, cmd.count, cmd.rawCount, cmd.argument) ?: return false

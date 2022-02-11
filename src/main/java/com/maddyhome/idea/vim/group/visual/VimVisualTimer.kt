@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,10 +18,13 @@
 
 package com.maddyhome.idea.vim.group.visual
 
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.group.visual.VimVisualTimer.mode
 import com.maddyhome.idea.vim.group.visual.VimVisualTimer.singleTask
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
+import com.maddyhome.idea.vim.vimscript.services.OptionService
+import java.awt.event.ActionEvent
 import javax.swing.Timer
 
 /**
@@ -32,7 +35,7 @@ import javax.swing.Timer
  *   If IdeaVim had reacted to this selection immediately, its listeners were called twice: after selection set and
  *   after selection removing. After there both operations vim would get normal mode, what is inconvenient because user
  *   expects vim to stay in insert mode.
- *   Same approach is used in some accented characters on MacOs and for Romaji layout in Japanese language (VIM-1725).
+ *   Same approach is used in some accented characters on macOS and for Romaji layout in Japanese language (VIM-1725).
  *
  * Because of this IdeaVim doesn't react to selection change immediately. After selection was changed, vim waits some
  *   time (100 ms by default) and enables visual mode (or any another) if selection was not changed during this time.
@@ -71,13 +74,27 @@ object VimVisualTimer {
     if (mode == null) mode = currentMode
 
     // Default delay - 100 ms
-    val timer = Timer(OptionsManager.visualEnterDelay.value()) {
-      task(mode)
-      swingTimer = null
-      mode = null
+    val timer = Timer((VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, "visualdelay") as VimInt).value) {
+      timerAction(task)
     }
     timer.isRepeats = false
     timer.start()
     swingTimer = timer
+  }
+
+  fun doNow() {
+    val swingTimer1 = swingTimer
+    if (swingTimer1 != null) {
+      swingTimer1.stop()
+      swingTimer1.actionListeners?.forEach {
+        it.actionPerformed(ActionEvent(swingTimer1, 0, swingTimer1.actionCommand, System.currentTimeMillis(), 0))
+      }
+    }
+  }
+
+  inline fun timerAction(task: (initialMode: CommandState.Mode?) -> Unit) {
+    task(mode)
+    swingTimer = null
+    mode = null
   }
 }

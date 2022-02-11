@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -190,9 +190,9 @@ data class GlobalCommand(val ranges: Ranges, val argument: String, val invert: B
     // TODO: 26.05.2021 What about folds?
     editor.caretModel.moveToOffset(lineStartOffset)
     if (cmd == null || cmd.isEmpty() || (cmd.length == 1 && cmd[0] == '\n')) {
-      Executor.execute("p", editor, context, true)
+      Executor.execute("p", editor, context, skipHistory = true, indicateErrors = true, this.vimContext)
     } else {
-      Executor.execute(cmd, editor, context, true)
+      Executor.execute(cmd, editor, context, skipHistory = true, indicateErrors = true, this.vimContext)
     }
   }
 

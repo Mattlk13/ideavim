@@ -1,21 +1,35 @@
+/*
+ * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
+ * Copyright (C) 2003-2022 The IdeaVim authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.maddyhome.idea.vim.vimscript.model.commands
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.ex.ExException
 import com.maddyhome.idea.vim.ex.ranges.Ranges
-import com.maddyhome.idea.vim.option.NumberOption
-import com.maddyhome.idea.vim.option.OptionsManager
-import com.maddyhome.idea.vim.option.StringListOption
-import com.maddyhome.idea.vim.option.StringOption
-import com.maddyhome.idea.vim.option.ToggleOption
-import com.maddyhome.idea.vim.vimscript.model.Executable
+import com.maddyhome.idea.vim.newapi.IjVimEditor
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
 import com.maddyhome.idea.vim.vimscript.model.Script
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimBlob
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDictionary
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimFuncref
-import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimList
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
 import com.maddyhome.idea.vim.vimscript.model.expressions.EnvVariableExpression
@@ -24,15 +38,13 @@ import com.maddyhome.idea.vim.vimscript.model.expressions.OneElementSublistExpre
 import com.maddyhome.idea.vim.vimscript.model.expressions.OptionExpression
 import com.maddyhome.idea.vim.vimscript.model.expressions.Register
 import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
-import com.maddyhome.idea.vim.vimscript.model.expressions.SimpleExpression
 import com.maddyhome.idea.vim.vimscript.model.expressions.SublistExpression
 import com.maddyhome.idea.vim.vimscript.model.expressions.Variable
 import com.maddyhome.idea.vim.vimscript.model.expressions.operators.AssignmentOperator
-import com.maddyhome.idea.vim.vimscript.model.expressions.toVimDataType
 import com.maddyhome.idea.vim.vimscript.model.functions.DefinedFunctionHandler
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionDeclaration
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionFlag
-import com.maddyhome.idea.vim.vimscript.services.VariableService
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 
 /**
  * see "h :let"
@@ -52,60 +64,74 @@ data class LetCommand(
     if (!isSyntaxSupported) return ExecutionResult.Error
     when (variable) {
       is Variable -> {
-        if (isReadOnlyVariable(variable)) {
-          throw ExException("E46: Cannot change read-only variable \"$variable\"")
+        if ((variable.scope == Scope.SCRIPT_VARIABLE && vimContext.getFirstParentContext() !is Script) ||
+          (!isInsideFunction(vimContext) && (variable.scope == Scope.FUNCTION_VARIABLE || variable.scope == Scope.LOCAL_VARIABLE))
+        ) {
+          throw ExException("E461: Illegal variable name: ${variable.toString(editor, context, vimContext)}")
         }
-        VariableService.storeVariable(
-          variable, operator.getNewValue(variable, expression, editor, context, this),
-          editor, context, this
-        )
+
+        if (isReadOnlyVariable(variable, editor, context)) {
+          throw ExException("E46: Cannot change read-only variable \"${variable.toString(editor, context, vimContext)}\"")
+        }
+
+        val leftValue = VimPlugin.getVariableService().getNullableVariableValue(variable, editor, context, vimContext)
+        if (leftValue?.isLocked == true && leftValue.lockOwner?.name == variable.name) {
+          throw ExException("E741: Value is locked: ${variable.toString(editor, context, vimContext)}")
+        }
+        val rightValue = expression.evaluate(editor, context, vimContext)
+        VimPlugin.getVariableService().storeVariable(variable, operator.getNewValue(leftValue, rightValue), editor, context, this)
       }
 
       is OneElementSublistExpression -> {
-        if (variable.expression is Variable) {
-          val variableValue = VariableService.getNonNullVariableValue(variable.expression, editor, context, this)
-          when (variableValue) {
-            is VimDictionary -> {
-              val dictKey = VimString(variable.index.evaluate(editor, context, this).asString())
-              if (operator != AssignmentOperator.ASSIGNMENT && !variableValue.dictionary.containsKey(dictKey)) {
-                throw ExException("E716: Key not present in Dictionary: $dictKey")
-              }
-              var valueToStore = if (variableValue.dictionary.containsKey(dictKey)) {
-                operator.getNewValue(SimpleExpression(variableValue.dictionary[dictKey]!!), expression, editor, context, this)
-              } else {
-                expression.evaluate(editor, context, this)
-              }
-              if (valueToStore is VimFuncref && !valueToStore.isSelfFixed &&
-                valueToStore.handler is DefinedFunctionHandler &&
-                (valueToStore.handler as DefinedFunctionHandler).function.flags.contains(FunctionFlag.DICT)
-              ) {
-                valueToStore = valueToStore.copy()
-                valueToStore.dictionary = variableValue
-              }
-              variableValue.dictionary[dictKey] = valueToStore
+        when (val containerValue = variable.expression.evaluate(editor, context, vimContext)) {
+          is VimDictionary -> {
+            val dictKey = VimString(variable.index.evaluate(editor, context, this).asString())
+            if (operator != AssignmentOperator.ASSIGNMENT && !containerValue.dictionary.containsKey(dictKey)) {
+              throw ExException("E716: Key not present in Dictionary: $dictKey")
             }
-            is VimList -> {
-              // we use Integer.parseInt(........asString()) because in case if index's type is Float, List, Dictionary etc
-              // vim throws the same error as the asString() method
-              val index = Integer.parseInt(variable.index.evaluate(editor, context, this).asString())
-              if (index > variableValue.values.size - 1) {
-                throw ExException("E684: list index out of range: $index")
+            val expressionValue = expression.evaluate(editor, context, this)
+            var valueToStore = if (dictKey in containerValue.dictionary) {
+              if (containerValue.dictionary[dictKey]!!.isLocked) {
+                // todo better exception message
+                throw ExException("E741: Value is locked: ${variable.originalString}")
               }
-              variableValue.values[index] = operator.getNewValue(
-                SimpleExpression(variableValue.values[index]), expression, editor, context, this
-              )
+              operator.getNewValue(containerValue.dictionary[dictKey]!!, expressionValue)
+            } else {
+              if (containerValue.isLocked) {
+                // todo better exception message
+                throw ExException("E741: Value is locked: ${variable.originalString}")
+              }
+              expressionValue
             }
-            is VimBlob -> TODO()
-            else -> throw ExException("E689: Can only index a List, Dictionary or Blob")
+            if (valueToStore is VimFuncref && !valueToStore.isSelfFixed &&
+              valueToStore.handler is DefinedFunctionHandler &&
+              (valueToStore.handler as DefinedFunctionHandler).function.flags.contains(FunctionFlag.DICT)
+            ) {
+              valueToStore = valueToStore.copy()
+              valueToStore.dictionary = containerValue
+            }
+            containerValue.dictionary[dictKey] = valueToStore
           }
-        } else {
-          throw ExException("E121: Undefined variable")
+          is VimList -> {
+            // we use Integer.parseInt(........asString()) because in case if index's type is Float, List, Dictionary etc
+            // vim throws the same error as the asString() method
+            val index = Integer.parseInt(variable.index.evaluate(editor, context, this).asString())
+            if (index > containerValue.values.size - 1) {
+              throw ExException("E684: list index out of range: $index")
+            }
+            if (containerValue.values[index].isLocked) {
+              throw ExException("E741: Value is locked: ${variable.originalString}")
+            }
+            containerValue.values[index] = operator.getNewValue(containerValue.values[index], expression.evaluate(editor, context, vimContext))
+          }
+          is VimBlob -> TODO()
+          else -> throw ExException("E689: Can only index a List, Dictionary or Blob")
         }
       }
 
       is SublistExpression -> {
         if (variable.expression is Variable) {
-          val variableValue = VariableService.getNonNullVariableValue(variable.expression, editor, context, this)
+          val variableValue = VimPlugin.getVariableService().getNonNullVariableValue(variable.expression, editor, context, this)
           if (variableValue is VimList) {
             // we use Integer.parseInt(........asString()) because in case if index's type is Float, List, Dictionary etc
             // vim throws the same error as the asString() method
@@ -150,69 +176,64 @@ data class LetCommand(
         }
       }
 
-      // todo local options
       is OptionExpression -> {
-        val option = OptionsManager.getOption(variable.optionName) ?: throw ExException("E355: Unknown option: ${variable.optionName}")
-        val optionValue = option.toVimDataType()
+        val optionValue = variable.evaluate(editor, context, vimContext)
         if (operator == AssignmentOperator.ASSIGNMENT || operator == AssignmentOperator.CONCATENATION ||
           operator == AssignmentOperator.ADDITION || operator == AssignmentOperator.SUBTRACTION
         ) {
-          val newValue = operator.getNewValue(SimpleExpression(optionValue), expression, editor, context, this)
-          when (option) {
-            is ToggleOption -> {
-              if (newValue.asBoolean()) {
-                option.set()
-              } else {
-                option.reset()
-              }
-            }
-            is NumberOption -> {
-              if (newValue is VimInt) {
-                option.set(newValue.value)
-              } else {
-                TODO()
-              }
-            }
-            is StringOption -> {
-              option.set(newValue.asString())
-            }
-            is StringListOption -> {
-              if (newValue is VimList) {
-                option.set(newValue.values.joinToString(separator = ",") { it.asString() })
-              } else {
-                TODO()
-              }
-            }
-            else -> TODO()
+          val newValue = operator.getNewValue(optionValue, expression.evaluate(editor, context, this))
+          when (variable.scope) {
+            Scope.GLOBAL_VARIABLE -> VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, variable.optionName, newValue, variable.originalString)
+            Scope.LOCAL_VARIABLE -> VimPlugin.getOptionService().setOptionValue(OptionService.Scope.LOCAL(IjVimEditor(editor)), variable.optionName, newValue, variable.originalString)
+            else -> throw ExException("Invalid option scope")
           }
         } else {
-          // one of the nontrivial vim exceptions should be thrown
           TODO()
         }
       }
 
       is EnvVariableExpression -> TODO()
 
-      is Register -> TODO()
+      is Register -> {
+        if (!(variable.char.isLetter() || variable.char.isDigit() || variable.char == '"')) {
+          throw ExException("Let command supports only 0-9a-zA-Z\" registers at the moment")
+        }
+
+        VimPlugin.getRegister().startRecording(editor, variable.char)
+        VimPlugin.getRegister().recordText(expression.evaluate(editor, context, vimContext).asString())
+        VimPlugin.getRegister().finishRecording(editor)
+      }
 
       else -> throw ExException("E121: Undefined variable")
     }
     return ExecutionResult.Success
   }
 
-  private fun isReadOnlyVariable(variable: Variable): Boolean {
+  private fun isInsideFunction(vimLContext: VimLContext): Boolean {
+    var isInsideFunction = false
+    var node = vimLContext
+    while (!node.isFirstParentContext()) {
+      if (node is FunctionDeclaration) {
+        isInsideFunction = true
+      }
+      node = node.getPreviousParentContext()
+    }
+    return isInsideFunction
+  }
+
+  private fun isReadOnlyVariable(variable: Variable, editor: Editor, context: DataContext): Boolean {
     if (variable.scope == Scope.FUNCTION_VARIABLE) return true
-    if (variable.scope == null && variable.name == "self" && isInsideDictionaryFunction()) return true
+    if (variable.scope == null && variable.name.evaluate(editor, context, vimContext).value == "self" && isInsideDictionaryFunction()) return true
     return false
   }
 
   private fun isInsideDictionaryFunction(): Boolean {
-    var node: Executable = this
-    while (node !is Script) {
+    var node: VimLContext = this
+    while (!node.isFirstParentContext()) {
       if (node is FunctionDeclaration && node.flags.contains(FunctionFlag.DICT)) {
         return true
       }
-      node = node.parent
+      node = node.getPreviousParentContext()
     }
     return false
   }

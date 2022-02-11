@@ -1,14 +1,6 @@
 package _Self
 
-import _Self.buildTypes.Nvim
-import _Self.buildTypes.PluginVerifier
-import _Self.buildTypes.PropertyBased
-import _Self.buildTypes.Qodana
-import _Self.buildTypes.TestsForIntelliJ20202
-import _Self.buildTypes.TestsForIntelliJ20203
-import _Self.buildTypes.TestsForIntelliJ20211
-import _Self.buildTypes.TestsForIntelliJ20212
-import _Self.buildTypes.TestsForIntelliJEAP
+import _Self.buildTypes.*
 import _Self.subprojects.GitHub
 import _Self.subprojects.OldTests
 import _Self.subprojects.Releases
@@ -16,6 +8,7 @@ import _Self.vcsRoots.Branch_181
 import _Self.vcsRoots.Branch_183
 import _Self.vcsRoots.Branch_191_193
 import _Self.vcsRoots.Branch_201
+import _Self.vcsRoots.Branch_202
 import _Self.vcsRoots.GitHubPullRequest
 import jetbrains.buildServer.configs.kotlin.v2019_2.Project
 
@@ -29,16 +22,18 @@ object Project : Project({
   vcsRoot(Branch_181)
   vcsRoot(Branch_191_193)
   vcsRoot(Branch_201)
+  vcsRoot(Branch_202)
   vcsRoot(GitHubPullRequest)
 
   // Builds
-  buildType(TestsForIntelliJ20202)
   buildType(TestsForIntelliJ20203)
   buildType(TestsForIntelliJ20211)
   buildType(TestsForIntelliJ20212)
+  buildType(TestsForIntelliJ20213)
   buildType(TestsForIntelliJEAP)
 
   buildType(PropertyBased)
+  buildType(LongRunning)
 
   buildType(Nvim)
   buildType(PluginVerifier)

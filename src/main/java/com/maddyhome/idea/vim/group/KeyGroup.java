@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@ import com.maddyhome.idea.vim.helper.HelperKt;
 import com.maddyhome.idea.vim.helper.StringHelper;
 import com.maddyhome.idea.vim.key.*;
 import com.maddyhome.idea.vim.vimscript.model.Executable;
+import com.maddyhome.idea.vim.vimscript.model.VimLContext;
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression;
 import kotlin.Pair;
 import kotlin.text.StringsKt;
@@ -152,9 +153,8 @@ public class KeyGroup implements PersistentStateComponent<Element> {
                             @NotNull MappingOwner owner,
                             @NotNull Expression toExpr,
                             @NotNull String originalString,
-                            @NotNull Executable parent,
                             boolean recursive) {
-    modes.stream().map(this::getKeyMapping).forEach(o -> o.put(fromKeys, toExpr, owner, originalString, parent, recursive));
+    modes.stream().map(this::getKeyMapping).forEach(o -> o.put(fromKeys, toExpr, owner, originalString, recursive));
     registerKeyMapping(fromKeys, owner);
   }
 

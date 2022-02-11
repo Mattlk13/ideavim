@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@
  */
 package org.jetbrains.plugins.ideavim.ex.implementation.commands
 
+import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.editor.textarea.TextComponentEditorImpl
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper
@@ -27,6 +29,7 @@ import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
 import org.jetbrains.plugins.ideavim.waitAndAssert
+import javax.swing.JTextArea
 
 /**
  * @author vlan
@@ -57,15 +60,6 @@ class MapCommandTest : VimTestCase() {
     assertState("Hello, World!\n")
     assertMode(CommandState.Mode.COMMAND)
     assertOffset(6)
-  }
-
-  @TestWithoutNeovim(SkipNeovimReason.DIFFERENT)
-  fun testBackslashEscape() {
-    configureByText("\n")
-    typeText(commandToKeys("imap \\\\,\\<,\\n foo"))
-    assertPluginError(false)
-    typeText(StringHelper.stringToKeys("i\\,<,\\n"))
-    assertState("foo\n")
   }
 
   fun testBackslashAtEnd() {
@@ -732,21 +726,6 @@ n  ,f            <Plug>Foo
     TestCase.assertTrue(VimPlugin.isError())
   }
 
-  fun `test double recursion`() {
-    val text = """
-          -----
-          1${c}2345
-          abcde
-          -----
-    """.trimIndent()
-    configureByJavaText(text)
-
-    typeText(commandToKeys("map b wbb"))
-    typeText(StringHelper.parseKeys("b"))
-
-    TestCase.assertTrue(VimPlugin.isError())
-  }
-
   fun `test map with expression`() {
     // we test that ternary expression works and cursor stays at the same place after leaving normal mode
     val text = """
@@ -784,6 +763,51 @@ n  ,f            <Plug>Foo
   }
 
   @TestWithoutNeovim(reason = SkipNeovimReason.PLUGIN_ERROR)
+  fun `test map expr context`() {
+    val text = """
+          -----
+          1${c}2345
+          abcde
+          -----
+    """.trimIndent()
+    configureByJavaText(text)
+
+    val editor = TextComponentEditorImpl(null, JTextArea())
+    val context = DataContext.EMPTY_CONTEXT
+    Executor.execute(
+      """
+      let s:mapping = '^f8a'
+      nnoremap <expr> t s:mapping
+      """.trimIndent(),
+      editor, context, skipHistory = false, indicateErrors = true, null
+    )
+    typeText(parseKeys("t"))
+    assertPluginError(true)
+    assertPluginErrorMessageContains("E121: Undefined variable: s:mapping")
+  }
+
+  // todo keyPresses invoked inside a script should have access to the script context
+//  @TestWithoutNeovim(reason = SkipNeovimReason.PLUGIN_ERROR)
+//  fun `test map expr context`() {
+//    configureByText("\n")
+//    typeText(commandToKeys("""
+//      let s:var = 'itext'|
+//      nnoremap <expr> t s:var|
+//      fun! T()|
+//        normal t|
+//      endfun|
+//    """.trimIndent()))
+//    assertState("\n")
+//    typeText(commandToKeys("call T()"))
+//    assertPluginError(false)
+//    assertState("text\n")
+//
+//    typeText(parseKeys("t"))
+//    assertPluginError(true)
+//    assertPluginErrorMessageContains("E121: Undefined variable: s:var")
+//  }
+
+  @TestWithoutNeovim(reason = SkipNeovimReason.PLUGIN_ERROR)
   fun `test exception during expression evaluation in map with expression`() {
     val text = """
           -----
@@ -797,6 +821,59 @@ n  ,f            <Plug>Foo
     assertPluginError(true)
     assertPluginErrorMessageContains("E117: Unknown function: unknownFunction")
     assertState(text)
+  }
+
+  fun `test rhc with triangle brackets`() {
+    configureByText("\n")
+    typeText(commandToKeys("inoremap p <p>"))
+    typeText(parseKeys("ip"))
+    assertState("<p>\n")
+  }
+
+  fun `test pattern in mapping`() {
+    configureByText(
+      """
+      private fun myfun(funArg: String) {
+        println(${c}funArg)
+      }
+      """.trimIndent()
+    )
+    typeText(commandToKeys("nnoremap ,f ?\\<fun\\><CR>"))
+    typeText(parseKeys(",f"))
+    assertState(
+      """
+      private ${c}fun myfun(funArg: String) {
+        println(funArg)
+      }
+      """.trimIndent()
+    )
+  }
+
+  @TestWithoutNeovim(reason = SkipNeovimReason.DIFFERENT)
+  fun `ignoretest with shorter conflict`() {
+    val text = """
+          -----
+          1${c}2345
+          abcde
+          -----
+    """.trimIndent()
+    configureByJavaText(text)
+
+    typeText(commandToKeys("map kkk l"))
+    typeText(commandToKeys("map kk h"))
+    typeText(StringHelper.parseKeys("kk"))
+
+    checkDelayedMapping(
+      text,
+      """
+              -----
+              ${c}12345
+              abcde
+              -----
+      """.trimIndent()
+    )
+    assertMode(CommandState.Mode.COMMAND)
+    assertSubMode(CommandState.SubMode.NONE)
   }
 
   private fun checkDelayedMapping(before: String, after: String) {

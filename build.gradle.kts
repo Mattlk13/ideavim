@@ -11,10 +11,10 @@ buildscript {
     }
 
     dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.10")
         classpath("com.github.AlexPl292:mark-down-to-slack:1.1.2")
-        classpath("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
-        classpath("org.kohsuke:github-api:1.133")
+        classpath("org.eclipse.jgit:org.eclipse.jgit:6.0.0.202111291000-r")
+        classpath("org.kohsuke:github-api:1.301")
         classpath("org.jetbrains:markdown:0.2.4")
     }
 }
@@ -22,13 +22,13 @@ buildscript {
 plugins {
     antlr
     java
-    kotlin("jvm") version "1.5.0"
+    kotlin("jvm") version "1.5.10"
 
-    id("org.jetbrains.intellij") version "1.2.0"
-    id("org.jetbrains.changelog") version "1.3.0"
+    id("org.jetbrains.intellij") version "1.3.1"
+    id("org.jetbrains.changelog") version "1.3.1"
 
     // ktlint linter - read more: https://github.com/JLLeitschuh/ktlint-gradle
-    id("org.jlleitschuh.gradle.ktlint") version "10.2.0"
+    id("org.jlleitschuh.gradle.ktlint") version "10.2.1"
 }
 
 // Import variables from gradle.properties file
@@ -51,17 +51,20 @@ repositories {
 
 dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion")
-    compileOnly("org.jetbrains:annotations:22.0.0")
+    compileOnly("org.jetbrains:annotations:23.0.0")
 
     // https://mvnrepository.com/artifact/com.ensarsarajcic.neovim.java/neovim-api
     testImplementation("com.ensarsarajcic.neovim.java:neovim-api:0.2.3")
     testImplementation("com.ensarsarajcic.neovim.java:core-rpc:0.2.3")
 
+    // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-test
+    testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
+
     testImplementation("com.intellij.remoterobot:remote-robot:$remoteRobotVersion")
     testImplementation("com.intellij.remoterobot:remote-fixtures:$remoteRobotVersion")
-
-    runtimeOnly("org.antlr:antlr4-runtime:4.9.2")
-    antlr("org.antlr:antlr4:4.9.2")
+    testImplementation("com.automation-remarks:video-recorder-junit:2.0")
+    runtimeOnly("org.antlr:antlr4-runtime:4.9.3")
+    antlr("org.antlr:antlr4:4.9.3")
 }
 
 configurations {
@@ -73,15 +76,16 @@ configurations {
 // --- Compilation
 
 tasks {
-    // Include tests for testing on LATEST-EAP-SNAPSHOT
-//    val test by getting(Test::class) {
-//        isScanForTestClasses = false
-//        // Only run tests from classes that end with "Test"
-//        include("**/*Test.class")
-//        include("**/*Tests.class")
-//        exclude("**/ParserTest.class")
-//    }
-//
+    // Issue in gradle 7.3
+    val test by getting(Test::class) {
+        isScanForTestClasses = false
+        // Only run tests from classes that end with "Test"
+        include("**/*Test.class")
+        include("**/*test.class")
+        include("**/*Tests.class")
+        exclude("**/ParserTest.class")
+    }
+
     compileJava {
         sourceCompatibility = javaVersion
         targetCompatibility = javaVersion
@@ -92,14 +96,14 @@ tasks {
     compileKotlin {
         kotlinOptions {
             jvmTarget = javaVersion
-            apiVersion = "1.3"
+            apiVersion = "1.4"
 //            allWarningsAsErrors = true
         }
     }
     compileTestKotlin {
         kotlinOptions {
             jvmTarget = javaVersion
-            apiVersion = "1.3"
+            apiVersion = "1.4"
 //            allWarningsAsErrors = true
         }
     }
@@ -107,7 +111,7 @@ tasks {
 
 gradle.projectsEvaluated {
     tasks.compileJava {
-        options.compilerArgs.add("-Werror")
+//        options.compilerArgs.add("-Werror")
         options.compilerArgs.add("-Xlint:deprecation")
     }
 }
@@ -117,11 +121,13 @@ gradle.projectsEvaluated {
 intellij {
     version.set(ideaVersion)
     pluginName.set("IdeaVim")
+
     updateSinceUntilBuild.set(false)
+
     downloadSources.set(downloadIdeaSources.toBoolean())
     instrumentCode.set(instrumentPluginCode.toBoolean())
     intellijRepository.set("https://www.jetbrains.com/intellij-repository")
-    plugins.set(listOf("java"))
+    plugins.set(listOf("java", "AceJump:3.8.4"))
 }
 
 tasks {
@@ -144,6 +150,7 @@ tasks {
     runPluginVerifier {
         downloadDir.set("${project.buildDir}/pluginVerifier/ides")
         teamCityOutputFormat.set(true)
+        ideVersions.set(listOf("IC-2021.3.1"))
     }
 
     generateGrammarSource {
@@ -168,6 +175,7 @@ ktlint {
 tasks {
     test {
         exclude("**/propertybased/**")
+        exclude("**/longrunning/**")
         exclude("/ui/**")
     }
 }
@@ -181,6 +189,11 @@ tasks.register<Test>("testWithNeovim") {
 tasks.register<Test>("testPropertyBased") {
     group = "verification"
     include("**/propertybased/**")
+}
+
+tasks.register<Test>("testLongRunning") {
+    group = "verification"
+    include("**/longrunning/**")
 }
 
 tasks.register<Test>("testUi") {
@@ -306,10 +319,17 @@ fun updateChangelog() {
     println(projectDir)
     val repository = org.eclipse.jgit.lib.RepositoryBuilder().setGitDir(File("$projectDir/.git")).build()
     val git = org.eclipse.jgit.api.Git(repository)
-    val messages = git.log().call().take(40).map { it.shortMessage }
+    val lastSuccessfulCommit = System.getenv("SUCCESS_COMMIT")!!
+    val messages = git.log().call()
+        .takeWhile {
+            !it.id.name.equals(lastSuccessfulCommit, ignoreCase = true)
+        }
+        .map { it.shortMessage }
 
     // Collect fixes
     val newFixes = mutableListOf<Change>()
+    println("Last successful commit: $lastSuccessfulCommit")
+    println("Amount of commits: ${messages.size}")
     println("Start emails processing")
     for (message in messages) {
         println("Processing '$message'...")
@@ -338,10 +358,8 @@ fun updateChangelog() {
     val firstPartOfChanges = changes.take(insertOffset)
     val actualFixes = newFixes
         .filterNot { it.id in firstPartOfChanges }
-        // Temporally disable this example
-        .filterNot { it.id == "VIM-123" }
     val newUpdates = actualFixes
-        .joinToString { "* [${it.id}](https://youtrack.jetbrains.com/issue/${it.id}) ${it.text}\n" }
+        .joinToString("") { "* [${it.id}](https://youtrack.jetbrains.com/issue/${it.id}) ${it.text}\n" }
 
     changesBuilder.insert(insertOffset, newUpdates)
     if (actualFixes.isNotEmpty()) {
@@ -354,14 +372,21 @@ fun updateAuthors(uncheckedEmails: Set<String>) {
     println(projectDir)
     val repository = org.eclipse.jgit.lib.RepositoryBuilder().setGitDir(File("$projectDir/.git")).build()
     val git = org.eclipse.jgit.api.Git(repository)
-    val hashesAndEmailes = git.log().call().take(40).mapTo(HashSet()) { it.name to it.authorIdent.emailAddress }
+    val lastSuccessfulCommit = System.getenv("SUCCESS_COMMIT")!!
+    val hashesAndEmailes = git.log().call()
+        .takeWhile {
+            !it.id.name.equals(lastSuccessfulCommit, ignoreCase = true)
+        }
+        .associate { it.authorIdent.emailAddress to it.name }
 
-    println("Emails: ${hashesAndEmailes.map { it.second }}")
+    println("Last successful commit: $lastSuccessfulCommit")
+    println("Amount of commits: ${hashesAndEmailes.size}")
+    println("Emails: ${hashesAndEmailes.keys}")
     val gitHub = org.kohsuke.github.GitHub.connect()
     val ghRepository = gitHub.getRepository("JetBrains/ideavim")
     val users = mutableSetOf<Author>()
     println("Start emails processing")
-    for ((hash, email) in hashesAndEmailes) {
+    for ((email, hash) in hashesAndEmailes) {
         println("Processing '$email'...")
         if (email in uncheckedEmails) {
             println("Email '$email' is in unchecked emails. Skip it")

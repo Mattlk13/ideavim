@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.EmptyAction
 import com.intellij.openapi.actionSystem.PlatformDataKeys
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Editor
@@ -35,17 +36,25 @@ import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.EditorDataContext
 import com.maddyhome.idea.vim.helper.EditorHelper
+import com.maddyhome.idea.vim.helper.HandlerInjector
 import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.helper.inInsertMode
 import com.maddyhome.idea.vim.helper.inNormalMode
 import com.maddyhome.idea.vim.helper.isIdeaVimDisabledHere
 import com.maddyhome.idea.vim.helper.isPrimaryEditor
 import com.maddyhome.idea.vim.helper.isTemplateActive
+import com.maddyhome.idea.vim.helper.updateCaretsVisualAttributes
 import com.maddyhome.idea.vim.key.ShortcutOwner
 import com.maddyhome.idea.vim.key.ShortcutOwnerInfo
-import com.maddyhome.idea.vim.listener.IdeaSpecifics.AppCodeTemplates.appCodeTemplateCaptured
-import com.maddyhome.idea.vim.listener.IdeaSpecifics.aceJumpActive
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.listener.AceJumpService
+import com.maddyhome.idea.vim.listener.AppCodeTemplates.appCodeTemplateCaptured
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.newapi.vim
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.model.options.OptionChangeListener
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import javax.swing.KeyStroke
@@ -57,7 +66,7 @@ import javax.swing.KeyStroke
  * These keys are not passed to [com.maddyhome.idea.vim.VimTypedActionHandler] and should be handled by actions.
  */
 class VimShortcutKeyAction : AnAction(), DumbAware/*, LightEditCompatible*/ {
-  private val traceTime = OptionsManager.ideatracetime.isSet
+  private val traceTime = VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.ideatracetimeName)
 
   override fun actionPerformed(e: AnActionEvent) {
     LOG.trace("Executing shortcut key action")
@@ -71,7 +80,7 @@ class VimShortcutKeyAction : AnAction(), DumbAware/*, LightEditCompatible*/ {
       // Should we use HelperKt.getTopLevelEditor(editor) here, as we did in former EditorKeyHandler?
       try {
         val start = if (traceTime) System.currentTimeMillis() else null
-        KeyHandler.getInstance().handleKey(editor, keyStroke, EditorDataContext.init(editor, e.dataContext))
+        KeyHandler.getInstance().handleKey(editor, keyStroke, EditorDataContext.init(editor, e.dataContext).vim)
         if (start != null) {
           val duration = System.currentTimeMillis() - start
           LOG.info("VimShortcut update '$keyStroke': $duration ms")
@@ -113,12 +122,20 @@ class VimShortcutKeyAction : AnAction(), DumbAware/*, LightEditCompatible*/ {
         return false
       }
 
-      if (aceJumpActive()) {
-        LOG.trace("Do not execute shortcut because AceJump is active")
+      val keyCode = keyStroke.keyCode
+
+      if (EditorHelper.getVirtualFile(editor)?.extension == "ipynb" && HandlerInjector.notebookCommandMode()) {
+        LOG.debug("Python Notebook command mode")
+        if (keyCode == KeyEvent.VK_RIGHT || keyCode == KeyEvent.VK_KP_RIGHT || keyCode == KeyEvent.VK_ENTER) {
+          invokeLater { editor.updateCaretsVisualAttributes() }
+        }
         return false
       }
 
-      val keyCode = keyStroke.keyCode
+      if (AceJumpService.getInstance()?.isActive(editor) == true) {
+        LOG.trace("Do not execute shortcut because AceJump is active")
+        return false
+      }
 
       if (LookupManager.getActiveLookup(editor) != null && !LookupKeys.isEnabledForLookup(keyStroke)) {
         LOG.trace("Do not execute shortcut because of lookup keys")
@@ -183,9 +200,10 @@ class VimShortcutKeyAction : AnAction(), DumbAware/*, LightEditCompatible*/ {
   }
 
   private fun isEnabledForEscape(editor: Editor): Boolean {
+    val ideaVimSupportValue = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.ideavimsupportName) as VimString).value
     return editor.isPrimaryEditor() ||
       EditorHelper.isFileEditor(editor) && !editor.inNormalMode ||
-      OptionsManager.ideavimsupport.contains("dialog") && !editor.inNormalMode
+      ideaVimSupportValue.contains("dialog") && !editor.inNormalMode
   }
 
   private fun isShortcutConflict(keyStroke: KeyStroke): Boolean {
@@ -223,22 +241,31 @@ class VimShortcutKeyAction : AnAction(), DumbAware/*, LightEditCompatible*/ {
    *   should this key be processed by IdeaVim, or by IDE. For example, dot and enter should be processed by IDE, but
    *   <C-W> by IdeaVim.
    *
-   * The list of keys that should be processed by IDE is stored in [OptionsManager.lookupKeys]. So, we should search
+   * The list of keys that should be processed by IDE is stored in the "lookupKeys" option. So, we should search
    *   if the pressed key is presented in this list. The caches are used to speedup the process.
    */
   private object LookupKeys {
     private var parsedLookupKeys: Set<KeyStroke> = parseLookupKeys()
 
     init {
-      OptionsManager.lookupKeys.addOptionChangeListener { _, _ ->
-        parsedLookupKeys = parseLookupKeys()
-      }
+      VimPlugin.getOptionService().addListener(
+        OptionConstants.lookupkeysName,
+        object : OptionChangeListener<VimDataType> {
+          override fun processGlobalValueChange(oldValue: VimDataType?) {
+            parsedLookupKeys = parseLookupKeys()
+          }
+        }
+      )
     }
 
     fun isEnabledForLookup(keyStroke: KeyStroke): Boolean = keyStroke !in parsedLookupKeys
 
-    private fun parseLookupKeys() = OptionsManager.lookupKeys.values()
-      .map { StringHelper.parseKeys(it) }.filter { it.isNotEmpty() }.map { it.first() }.toSet()
+    private fun parseLookupKeys() = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.lookupkeysName) as VimString).value
+      .split(",")
+      .map { StringHelper.parseKeys(it) }
+      .filter { it.isNotEmpty() }
+      .map { it.first() }
+      .toSet()
   }
 
   companion object {

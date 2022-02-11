@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,9 +39,7 @@ data class ActionListCommand(val ranges: Ranges, val argument: String) : Command
     val searchPattern = argument.trim().toLowerCase().split("*")
     val actionManager = ActionManager.getInstance()
 
-    // [VERSION UPDATE] 203+
-    @Suppress("DEPRECATION")
-    val actions = actionManager.getActionIds("")
+    val actions = actionManager.getActionIdList("")
       .sortedWith(String.CASE_INSENSITIVE_ORDER)
       .map { actionName ->
         val shortcuts = actionManager.getAction(actionName).shortcutSet.shortcuts.joinToString(" ") {

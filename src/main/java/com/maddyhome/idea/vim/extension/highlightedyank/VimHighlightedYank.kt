@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,9 +39,6 @@ import com.maddyhome.idea.vim.listener.VimInsertListener
 import com.maddyhome.idea.vim.listener.VimYankListener
 import com.maddyhome.idea.vim.option.StrictMode
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
-import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
-import com.maddyhome.idea.vim.vimscript.model.expressions.Variable
-import com.maddyhome.idea.vim.vimscript.services.VariableService
 import org.jetbrains.annotations.NonNls
 import java.awt.Color
 import java.awt.Font
@@ -51,10 +48,10 @@ import java.util.concurrent.TimeUnit
 const val DEFAULT_HIGHLIGHT_DURATION: Long = 300
 
 @NonNls
-private val HIGHLIGHT_DURATION_VARIABLE_NAME = Variable(Scope.GLOBAL_VARIABLE, "highlightedyank_highlight_duration")
+private val HIGHLIGHT_DURATION_VARIABLE_NAME = "highlightedyank_highlight_duration"
 
 @NonNls
-private val HIGHLIGHT_COLOR_VARIABLE_NAME = Variable(Scope.GLOBAL_VARIABLE, "highlightedyank_highlight_color")
+private val HIGHLIGHT_COLOR_VARIABLE_NAME = "highlightedyank_highlight_color"
 private var defaultHighlightTextColor: Color? = null
 
 private fun getDefaultHighlightTextColor(): Color {
@@ -202,8 +199,8 @@ class VimHighlightedYank : VimExtension, VimYankListener, VimInsertListener {
       }
     }
 
-    private fun <T> extractVariable(variable: Variable, default: T, extractFun: (value: String) -> T): T {
-      val value = VariableService.getGlobalVariable(variable.name)
+    private fun <T> extractVariable(variable: String, default: T, extractFun: (value: String) -> T): T {
+      val value = VimPlugin.getVariableService().getGlobalVariableValue(variable)
 
       if (value is VimString) {
         return try {
@@ -211,7 +208,7 @@ class VimHighlightedYank : VimExtension, VimYankListener, VimInsertListener {
         } catch (e: Exception) {
           @VimNlsSafe val message = MessageHelper.message(
             "highlightedyank.invalid.value.of.0.1",
-            (if (variable.scope != null) variable.scope.c + ":" + variable.name else variable.name),
+            "g:$variable",
             e.message ?: ""
           )
           VimPlugin.showMessage(message)

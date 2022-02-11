@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,9 @@ package org.jetbrains.plugins.ideavim.action.scroll
 
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimTestCase
@@ -58,9 +60,28 @@ class ScrollHalfPageDownActionTest : VimTestCase() {
   }
 
   @TestWithoutNeovim(SkipNeovimReason.SCROLL)
-  fun`test scroll downwards in bottom half of last page moves to the last line`() {
+  fun`test scroll downwards in bottom half of last page moves caret to the last line without scrolling`() {
     configureByPages(5)
-    setPositionAndScroll(146, 165)
+    setPositionAndScroll(140, 165)
+    typeText(parseKeys("<C-D>"))
+    assertPosition(175, 0)
+    assertVisibleArea(141, 175)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.SCROLL)
+  fun`test scroll downwards in bottom half of last page moves caret to the last line with scrolloff`() {
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrolloffName, VimInt(10))
+    configureByPages(5)
+    setPositionAndScroll(140, 164)
+    typeText(parseKeys("<C-D>"))
+    assertPosition(175, 0)
+    assertVisibleArea(141, 175)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.SCROLL)
+  fun`test scroll downwards at end of file with existing virtual space moves caret without scrolling window`() {
+    configureByPages(5)
+    setPositionAndScroll(146, 165) // 146 at top line means bottom line is 181 (out of 175)
     typeText(parseKeys("<C-D>"))
     assertPosition(175, 0)
     assertVisibleArea(146, 175)
@@ -89,12 +110,12 @@ class ScrollHalfPageDownActionTest : VimTestCase() {
     configureByPages(5)
     setPositionAndScroll(100, 110)
     typeText(parseKeys("10<C-D>"))
-    assertEquals(OptionsManager.scroll.value(), 10)
+    assertEquals((VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrollName) as VimInt).value, 10)
   }
 
   @TestWithoutNeovim(SkipNeovimReason.SCROLL)
   fun`test scroll downwards uses scroll option`() {
-    OptionsManager.scroll.set(10)
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.scrollName, VimInt(10))
     configureByPages(5)
     setPositionAndScroll(100, 110)
     typeText(parseKeys("<C-D>"))
@@ -122,7 +143,7 @@ class ScrollHalfPageDownActionTest : VimTestCase() {
 
   @TestWithoutNeovim(SkipNeovimReason.SCROLL)
   fun`test scroll downwards keeps same column with nostartofline`() {
-    OptionsManager.startofline.reset()
+    VimPlugin.getOptionService().unsetOption(OptionService.Scope.GLOBAL, OptionConstants.startoflineName)
     configureByLines(100, "    I found it in a legendary land")
     setPositionAndScroll(20, 25, 14)
     typeText(parseKeys("<C-D>"))

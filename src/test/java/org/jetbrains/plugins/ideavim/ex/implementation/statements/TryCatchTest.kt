@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -157,5 +157,25 @@ class TryCatchTest : VimTestCase() {
     assertPluginError(true)
     assertPluginErrorMessageContains("my exception")
     assertExOutput("finally block\n")
+  }
+
+  fun `test finish in try catch`() {
+    configureByText("\n")
+    typeText(
+      commandToKeys(
+        """
+        let x = 0 |
+        let y = 0 |
+        try |
+          finish |
+          let x = 1 |
+        finally |
+          let y = 1 |
+        endtry |
+        """.trimIndent()
+      )
+    )
+    typeText(commandToKeys("echo x .. ' ' .. y"))
+    assertExOutput("0 1\n")
   }
 }

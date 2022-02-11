@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,9 +36,9 @@ data class PlugCommand(val ranges: Ranges, val argument: String) : Command.Singl
     if (firstChar != '"' && firstChar != '\'') return ExecutionResult.Error
 
     val pluginAlias = argument.drop(1).takeWhile { it != firstChar }
-    val option = VimExtensionRegistrar.getToggleByAlias(pluginAlias) ?: return ExecutionResult.Error
-    option.set()
-
+    if (!VimExtensionRegistrar.setOptionByPluginAlias(pluginAlias)) {
+      return ExecutionResult.Error
+    }
     return ExecutionResult.Success
   }
 }

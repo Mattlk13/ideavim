@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,6 @@ import com.maddyhome.idea.vim.helper.VimNlsSafe;
 import com.maddyhome.idea.vim.listener.SelectionVimListenerSuppressor;
 import com.maddyhome.idea.vim.listener.VimListenerSuppressor;
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
-import com.maddyhome.idea.vim.vimscript.services.VariableService;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -173,7 +172,7 @@ public class VimArgTextObjExtension implements VimExtension {
 
   @Nullable
   private static String bracketPairsVariable() {
-    final Object value = VariableService.INSTANCE.getGlobalVariable("argtextobj_pairs");
+    final Object value = VimPlugin.getVariableService().getGlobalVariableValue("argtextobj_pairs");
     if (value instanceof VimString) {
       return ((VimString)value).getValue();
     }
@@ -198,8 +197,14 @@ public class VimArgTextObjExtension implements VimExtension {
         this.isInner = isInner;
       }
 
+      @Nullable
       @Override
-      public @Nullable TextRange getRange(@NotNull Editor editor, @NotNull Caret caret, @NotNull DataContext context, int count, int rawCount, @Nullable Argument argument) {
+      public TextRange getRange(@NotNull Editor editor,
+                                @NotNull Caret caret,
+                                @NotNull DataContext context,
+                                int count,
+                                int rawCount,
+                                @Nullable Argument argument) {
         BracketPairs bracketPairs = DEFAULT_BRACKET_PAIRS;
         final String bracketPairsVar = bracketPairsVariable();
         if (bracketPairsVar != null) {

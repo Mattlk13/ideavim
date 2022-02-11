@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,12 +26,16 @@ import com.maddyhome.idea.vim.helper.DigraphResult
 import com.maddyhome.idea.vim.helper.DigraphSequence
 import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.helper.VimNlsSafe
+import com.maddyhome.idea.vim.helper.localEditors
 import com.maddyhome.idea.vim.helper.noneOfEnum
 import com.maddyhome.idea.vim.helper.updateCaretsVisualAttributes
 import com.maddyhome.idea.vim.helper.updateCaretsVisualPosition
 import com.maddyhome.idea.vim.helper.vimCommandState
 import com.maddyhome.idea.vim.key.CommandPartNode
-import com.maddyhome.idea.vim.option.OptionsManager.showmode
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.newapi.VimEditor
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.annotations.Contract
 import java.util.*
 import javax.swing.KeyStroke
@@ -39,17 +43,23 @@ import javax.swing.KeyStroke
 /**
  * Used to maintain state before and while entering a Vim command (operator, motion, text object, etc.)
  */
-class CommandState private constructor(private val editor: Editor) {
+class CommandState private constructor(private val editor: Editor?) {
   val commandBuilder = CommandBuilder(getKeyRootNode(MappingMode.NORMAL))
   private val modeStates = Stack<ModeState>()
   val mappingState = MappingState()
-  private val digraphSequence = DigraphSequence()
+  val digraphSequence = DigraphSequence()
   var isRecording = false
     set(value) {
       field = value
       doShowMode()
     }
   var isDotRepeatInProgress = false
+  var isRegisterPending = false
+  var isReplaceCharacter = false
+    set(value) {
+      field = value
+      onModeChanged()
+    }
 
   /**
    * The currently executing command
@@ -111,14 +121,14 @@ class CommandState private constructor(private val editor: Editor) {
   }
 
   fun resetReplaceCharacter() {
-    if (subMode == SubMode.REPLACE_CHARACTER) {
-      popModes()
+    if (isReplaceCharacter) {
+      isReplaceCharacter = false
     }
   }
 
   fun resetRegisterPending() {
-    if (subMode == SubMode.REGISTER_PENDING) {
-      popModes()
+    if (isRegisterPending) {
+      isRegisterPending = false
     }
   }
 
@@ -129,8 +139,15 @@ class CommandState private constructor(private val editor: Editor) {
   }
 
   private fun onModeChanged() {
-    editor.updateCaretsVisualAttributes()
-    editor.updateCaretsVisualPosition()
+    if (editor != null) {
+      editor.updateCaretsVisualAttributes()
+      editor.updateCaretsVisualPosition()
+    } else {
+      localEditors().forEach { editor ->
+        editor.updateCaretsVisualAttributes()
+        editor.updateCaretsVisualPosition()
+      }
+    }
     doShowMode()
   }
 
@@ -147,6 +164,9 @@ class CommandState private constructor(private val editor: Editor) {
       Mode.SELECT -> MappingMode.SELECT
       Mode.CMD_LINE -> MappingMode.CMD_LINE
       Mode.OP_PENDING -> MappingMode.OP_PENDING
+      Mode.INSERT_NORMAL -> MappingMode.NORMAL
+      Mode.INSERT_VISUAL -> MappingMode.VISUAL
+      Mode.INSERT_SELECT -> MappingMode.SELECT
     }
   }
 
@@ -284,8 +304,8 @@ class CommandState private constructor(private val editor: Editor) {
 
   private fun doShowMode() {
     val msg = StringBuilder()
-    if (showmode.isSet) {
-      msg.append(getStatusString(modeStates.size - 1))
+    if (VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.showmodeName)) {
+      msg.append(getStatusString())
     }
     if (isRecording) {
       if (msg.isNotEmpty()) {
@@ -296,34 +316,53 @@ class CommandState private constructor(private val editor: Editor) {
     VimPlugin.showMode(msg.toString())
   }
 
-  private fun getStatusString(pos: Int): String {
-    val modeState = if (pos >= 0 && pos < modeStates.size) {
+  internal fun getStatusString(): String {
+    val pos = modeStates.size - 1
+    val modeState = if (pos >= 0) {
       modeStates[pos]
-    } else if (pos < 0) {
-      defaultModeState
     } else {
-      return ""
+      defaultModeState
     }
     return buildString {
       when (modeState.mode) {
-        Mode.COMMAND -> if (modeState.subMode == SubMode.SINGLE_COMMAND) {
-          append('(').append(getStatusString(pos - 1).toLowerCase()).append(')')
-        }
+        Mode.INSERT_NORMAL -> append("-- (insert) --")
         Mode.INSERT -> append("INSERT")
         Mode.REPLACE -> append("REPLACE")
-        Mode.VISUAL, Mode.SELECT -> {
-          if (pos > 0) {
-            val tmp = modeStates[pos - 1]
-            if (tmp.mode == Mode.COMMAND && tmp.subMode == SubMode.SINGLE_COMMAND) {
-              append(getStatusString(pos - 1))
-              append(" - ")
-            }
-          }
+        Mode.VISUAL -> {
+          append("-- VISUAL")
           when (modeState.subMode) {
-            SubMode.VISUAL_LINE -> append(modeState.mode).append(" LINE")
-            SubMode.VISUAL_BLOCK -> append(modeState.mode).append(" BLOCK")
-            else -> append(modeState.mode)
+            SubMode.VISUAL_LINE -> append(" LINE")
+            SubMode.VISUAL_BLOCK -> append(" BLOCK")
+            else -> Unit
           }
+          append(" --")
+        }
+        Mode.SELECT -> {
+          append("-- SELECT")
+          when (modeState.subMode) {
+            SubMode.VISUAL_LINE -> append(" LINE")
+            SubMode.VISUAL_BLOCK -> append(" BLOCK")
+            else -> Unit
+          }
+          append(" --")
+        }
+        Mode.INSERT_VISUAL -> {
+          append("-- (insert) VISUAL")
+          when (modeState.subMode) {
+            SubMode.VISUAL_LINE -> append(" LINE")
+            SubMode.VISUAL_BLOCK -> append(" BLOCK")
+            else -> Unit
+          }
+          append(" --")
+        }
+        Mode.INSERT_SELECT -> {
+          append("-- (insert) SELECT")
+          when (modeState.subMode) {
+            SubMode.VISUAL_LINE -> append(" LINE")
+            SubMode.VISUAL_BLOCK -> append(" BLOCK")
+            else -> Unit
+          }
+          append(" --")
         }
         else -> Unit
       }
@@ -335,11 +374,11 @@ class CommandState private constructor(private val editor: Editor) {
     COMMAND, VISUAL, SELECT, INSERT, CMD_LINE, /*EX*/
 
     // Additional modes
-    OP_PENDING, REPLACE /*, VISUAL_REPLACE, INSERT_NORMAL, INSERT_VISUAL, INSERT_SELECT */
+    OP_PENDING, REPLACE /*, VISUAL_REPLACE*/, INSERT_NORMAL, INSERT_VISUAL, INSERT_SELECT
   }
 
   enum class SubMode {
-    NONE, SINGLE_COMMAND, REGISTER_PENDING, REPLACE_CHARACTER, VISUAL_CHARACTER, VISUAL_LINE, VISUAL_BLOCK
+    NONE, VISUAL_CHARACTER, VISUAL_LINE, VISUAL_BLOCK
   }
 
   private data class ModeState(val mode: Mode, val subMode: SubMode) {
@@ -349,15 +388,29 @@ class CommandState private constructor(private val editor: Editor) {
   companion object {
     private val logger = Logger.getInstance(CommandState::class.java.name)
     private val defaultModeState = ModeState(Mode.COMMAND, SubMode.NONE)
+    private val globalState = CommandState(null)
 
     @JvmStatic
-    fun getInstance(editor: Editor): CommandState {
-      var res = editor.vimCommandState
-      if (res == null) {
-        res = CommandState(editor)
-        editor.vimCommandState = res
+    fun getInstance(editor: Editor?): CommandState {
+      return if (editor == null || VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.ideaglobalmodeName)) {
+        globalState
+      } else {
+        var res = editor.vimCommandState
+        if (res == null) {
+          res = CommandState(editor)
+          editor.vimCommandState = res
+        }
+        res
       }
-      return res
+    }
+
+    @JvmStatic
+    fun getInstance(editor: VimEditor): CommandState {
+      return if (editor is IjVimEditor) {
+        getInstance(editor.editor)
+      } else {
+        getInstance(null)
+      }
     }
 
     private fun getKeyRootNode(mappingMode: MappingMode): CommandPartNode<ActionBeanClass> {

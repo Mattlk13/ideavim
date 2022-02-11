@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,9 +18,10 @@
 
 package com.maddyhome.idea.vim.helper
 
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.SearchHelper.findPositionOfFirstCharacter
-import com.maddyhome.idea.vim.option.OptionsManager.ignorecase
-import com.maddyhome.idea.vim.option.OptionsManager.smartcase
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 
 enum class Direction(private val value: Int) {
   BACKWARDS(-1), FORWARDS(1);
@@ -199,6 +200,7 @@ private fun quoteChanges(chars: CharSequence, begin: Int) = sequence {
  * history, the smartcase option is applied, and `\<Work\>` will only match `Work`.
  */
 fun shouldIgnoreCase(pattern: String, ignoreSmartCaseOption: Boolean): Boolean {
-  val sc = smartcase.isSet && !ignoreSmartCaseOption
-  return ignorecase.isSet && !(sc && StringHelper.containsUpperCase(pattern))
+  val sc = VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.smartcaseName) &&
+    !ignoreSmartCaseOption
+  return VimPlugin.getOptionService().isSet(OptionService.Scope.GLOBAL, OptionConstants.ignorecaseName) && !(sc && StringHelper.containsUpperCase(pattern))
 }

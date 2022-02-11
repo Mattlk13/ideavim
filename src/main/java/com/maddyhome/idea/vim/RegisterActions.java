@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,15 +42,13 @@ public class RegisterActions {
     registerEpListener();
   }
 
-  // [VERSION UPDATE] 203+
-  @SuppressWarnings("deprecation")
   private static void registerEpListener() {
     // IdeaVim doesn't support contribution to VIM_ACTIONS_EP extension point, so technically we can skip this update,
     //   but let's support dynamic plugins in a more classic way and reload actions on every EP change.
-    VIM_ACTIONS_EP.getPoint(null).addExtensionPointListener(() -> {
+    VIM_ACTIONS_EP.addChangeListener(() -> {
       unregisterActions();
       registerActions();
-    }, false, VimPlugin.getInstance());
+    }, VimPlugin.getInstance());
   }
 
   public static @Nullable EditorActionHandlerBase findAction(@NotNull String id) {

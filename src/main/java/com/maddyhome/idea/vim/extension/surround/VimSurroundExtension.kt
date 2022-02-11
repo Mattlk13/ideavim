@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,9 +40,7 @@ import com.maddyhome.idea.vim.helper.StringHelper
 import com.maddyhome.idea.vim.helper.mode
 import com.maddyhome.idea.vim.key.OperatorFunction
 import com.maddyhome.idea.vim.option.ClipboardOptionsData.IdeaputDisabler
-import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
-import com.maddyhome.idea.vim.vimscript.model.expressions.Variable
-import com.maddyhome.idea.vim.vimscript.services.VariableService
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.ClipboardOptionHelper
 import org.jetbrains.annotations.NonNls
 import java.awt.event.KeyEvent
 import javax.swing.KeyStroke
@@ -60,7 +58,7 @@ class VimSurroundExtension : VimExtension {
   override fun getName() = "surround"
 
   @NonNls
-  private val NO_MAPPINGS = Variable(Scope.GLOBAL_VARIABLE, "surround_no_mappings")
+  private val NO_MAPPINGS = "surround_no_mappings"
 
   override fun init() {
     putExtensionHandlerMapping(MappingMode.N, StringHelper.parseKeys("<Plug>YSurround"), owner, YSurroundHandler(), false)
@@ -68,7 +66,7 @@ class VimSurroundExtension : VimExtension {
     putExtensionHandlerMapping(MappingMode.N, StringHelper.parseKeys("<Plug>DSurround"), owner, DSurroundHandler(), false)
     putExtensionHandlerMapping(MappingMode.XO, StringHelper.parseKeys("<Plug>VSurround"), owner, VSurroundHandler(), false)
 
-    val noMappings = VariableService.getGlobalVariable(NO_MAPPINGS.name)?.asBoolean() ?: false
+    val noMappings = VimPlugin.getVariableService().getGlobalVariableValue(NO_MAPPINGS)?.asBoolean() ?: false
     if (!noMappings) {
       putKeyMappingIfMissing(MappingMode.N, StringHelper.parseKeys("ys"), owner, StringHelper.parseKeys("<Plug>YSurround"), true)
       putKeyMappingIfMissing(MappingMode.N, StringHelper.parseKeys("cs"), owner, StringHelper.parseKeys("<Plug>CSurround"), true)
@@ -126,8 +124,8 @@ class VimSurroundExtension : VimExtension {
         perform("da" + pick(charFrom), editor)
         // Insert the surrounding characters and paste
         if (newSurround != null) {
-          innerValue.addAll(0, StringHelper.parseKeys(escape(newSurround.first)))
-          innerValue.addAll(StringHelper.parseKeys(escape(newSurround.second)))
+          innerValue.addAll(0, StringHelper.parseKeys(newSurround.first))
+          innerValue.addAll(StringHelper.parseKeys(newSurround.second))
         }
         pasteSurround(innerValue, editor)
         // Restore the old value
@@ -136,10 +134,9 @@ class VimSurroundExtension : VimExtension {
         executeNormalWithoutMapping(StringHelper.parseKeys("`["), editor)
       }
 
-      private fun escape(sequence: String): String = sequence.replace("<", "\\<")
-
       private fun perform(sequence: String, editor: Editor) {
-        IdeaputDisabler().use { executeNormalWithoutMapping(StringHelper.parseKeys("\"" + REGISTER + sequence), editor) }
+        ClipboardOptionHelper.IdeaputDisabler()
+          .use { executeNormalWithoutMapping(StringHelper.parseKeys("\"" + REGISTER + sequence), editor) }
       }
 
       private fun pasteSurround(
@@ -207,7 +204,7 @@ class VimSurroundExtension : VimExtension {
   companion object {
     private const val REGISTER = '"'
 
-    private val tagNameAndAttributesCapturePattern = "(\\w+)([^>]*)>".toPattern()
+    private val tagNameAndAttributesCapturePattern = "(\\S+)([^>]*)>".toPattern()
 
     private val SURROUND_PAIRS = mapOf(
       'b' to ("(" to ")"),

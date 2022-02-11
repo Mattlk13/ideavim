@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@ import com.intellij.ide.BrowserUtil
 import com.intellij.ide.actions.OpenFileAction
 import com.intellij.ide.actions.RevealFileAction
 import com.intellij.notification.Notification
-import com.intellij.notification.NotificationDisplayType
 import com.intellij.notification.NotificationGroup
+import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationListener
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
@@ -42,10 +42,9 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.key.ShortcutOwner
 import com.maddyhome.idea.vim.key.ShortcutOwnerInfo
-import com.maddyhome.idea.vim.listener.FindActionId
-import com.maddyhome.idea.vim.option.ClipboardOptionsData
-import com.maddyhome.idea.vim.option.OptionsManager
 import com.maddyhome.idea.vim.ui.VimEmulationConfigurable
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import com.maddyhome.idea.vim.vimscript.services.VimRcService
 import java.awt.datatransfer.StringSelection
 import java.io.File
@@ -76,7 +75,7 @@ class NotificationService(private val project: Project?) {
         notification,
         "set clipboard+=ideaput",
         "ideaput"
-      ) { OptionsManager.clipboard.append(ClipboardOptionsData.ideaput) }
+      ) { VimPlugin.getOptionService().appendValue(OptionService.Scope.GLOBAL, OptionConstants.clipboardName, OptionConstants.clipboard_ideaput, OptionConstants.clipboardName) }
     )
 
     notification.notify(project)
@@ -95,8 +94,8 @@ class NotificationService(private val project: Project?) {
       AppendToIdeaVimRcAction(
         notification,
         "set ideajoin",
-        "ideajoin"
-      ) { OptionsManager.ideajoin.set() }
+        OptionConstants.ideajoinName
+      ) { VimPlugin.getOptionService().setOption(OptionService.Scope.GLOBAL, OptionConstants.ideajoinName) }
     )
 
     notification.addAction(HelpLink(ideajoinExamplesUrl))
@@ -104,7 +103,7 @@ class NotificationService(private val project: Project?) {
   }
 
   fun enableRepeatingMode() = Messages.showYesNoDialog(
-    "Do you want to enable repeating keys in Mac OS X on press and hold?\n\n" +
+    "Do you want to enable repeating keys in macOS on press and hold?\n\n" +
       "(You can do it manually by running 'defaults write -g " +
       "ApplePressAndHoldEnabled 0' in the console).",
     IDEAVIM_NOTIFICATION_TITLE,
@@ -112,7 +111,7 @@ class NotificationService(private val project: Project?) {
   )
 
   fun specialKeymap(keymap: Keymap, listener: NotificationListener.Adapter) {
-    IDEAVIM_STICKY_GROUP.createNotification(
+    val notification = IDEAVIM_STICKY_GROUP.createNotification(
       IDEAVIM_NOTIFICATION_TITLE,
       "IdeaVim plugin doesn't use the special \"Vim\" keymap any longer. " +
         "Switching to \"${keymap.presentableName}\" keymap.<br/><br/>" +
@@ -122,17 +121,22 @@ class NotificationService(private val project: Project?) {
         "<li>IDE action shortcuts in \"File | Settings | Keymap\"</li>" +
         "<li>Vim or IDE handlers for conflicting shortcuts in <a href='#settings'>Vim Emulation</a> settings</li>" +
         "</ul>",
-      NotificationType.INFORMATION, listener
-    ).notify(project)
+      NotificationType.INFORMATION
+    )
+    notification.setListener(listener)
+    notification.notify(project)
   }
 
-  fun noVimrcAsDefault() = IDEAVIM_STICKY_GROUP.createNotification(
-    IDEAVIM_NOTIFICATION_TITLE, "",
-    "The ~/.vimrc file is no longer read by default, use ~/.ideavimrc instead. You can read it from your " +
-      "~/.ideavimrc using this command:<br/><br/>" +
-      "<code>source ~/.vimrc</code>",
-    NotificationType.INFORMATION
-  ).notify(project)
+  fun noVimrcAsDefault() {
+    val notification = IDEAVIM_STICKY_GROUP.createNotification(
+      IDEAVIM_NOTIFICATION_TITLE,
+      "The ~/.vimrc file is no longer read by default, use ~/.ideavimrc instead. You can read it from your " +
+        "~/.ideavimrc using this command:<br/><br/>" +
+        "<code>source ~/.vimrc</code>",
+      NotificationType.INFORMATION
+    )
+    notification.notify(project)
+  }
 
   fun notifyAboutShortcutConflict(keyStroke: KeyStroke) {
     val conflicts = VimPlugin.getKey().savedShortcutConflicts
@@ -187,7 +191,7 @@ class NotificationService(private val project: Project?) {
     ActionIdNotifier.notifyActionId(id, project)
   }
 
-  private object ActionIdNotifier {
+  object ActionIdNotifier {
     private var notification: Notification? = null
     private const val NO_ID = "<i>Cannot detect action id</i>"
 
@@ -230,7 +234,7 @@ class NotificationService(private val project: Project?) {
 
     class StopTracking : DumbAwareAction("Stop Tracking") {
       override fun actionPerformed(e: AnActionEvent) {
-        FindActionId.enabled = false
+        VimPlugin.getOptionService().unsetOption(OptionService.Scope.GLOBAL, OptionConstants.trackactionidsName)
         notification?.expire()
       }
     }
@@ -305,9 +309,8 @@ class NotificationService(private val project: Project?) {
   }
 
   companion object {
-    // [VERSION UPDATE] 203+
-    @Suppress("DEPRECATION")
-    val IDEAVIM_STICKY_GROUP = NotificationGroup("ideavim-sticky", NotificationDisplayType.STICKY_BALLOON, false)
+    val IDEAVIM_STICKY_GROUP: NotificationGroup =
+      NotificationGroupManager.getInstance().getNotificationGroup("ideavim-sticky")
     const val IDEAVIM_NOTIFICATION_ID = "ideavim"
     const val IDEAVIM_NOTIFICATION_TITLE = "IdeaVim"
     const val ideajoinExamplesUrl = "https://jb.gg/f9zji9"

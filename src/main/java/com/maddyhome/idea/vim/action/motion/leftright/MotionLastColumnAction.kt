@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,16 +26,19 @@ import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandFlags
 import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.handler.Motion
 import com.maddyhome.idea.vim.handler.MotionActionHandler
 import com.maddyhome.idea.vim.handler.toMotion
-import com.maddyhome.idea.vim.helper.commandState
 import com.maddyhome.idea.vim.helper.enumSetOf
 import com.maddyhome.idea.vim.helper.inVisualMode
 import com.maddyhome.idea.vim.helper.isEndAllowed
 import com.maddyhome.idea.vim.helper.vimLastColumn
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import java.util.*
 
 class MotionLastColumnInsertAction : MotionLastColumnAction() {
@@ -49,18 +52,17 @@ open class MotionLastColumnAction : MotionActionHandler.ForEachCaret() {
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Motion {
     val allow = if (editor.inVisualMode) {
-      val opt = OptionsManager.selection
-      opt.value != "old"
+      val opt = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.selectionName) as VimString).value
+      opt != "old"
     } else {
-      if (editor.commandState.isOperatorPending) false else editor.isEndAllowed
+      if (operatorArguments.isOperatorPending) false else editor.isEndAllowed
     }
 
-    return VimPlugin.getMotion().moveCaretToLineEndOffset(editor, caret, count - 1, allow).toMotion()
+    return VimPlugin.getMotion().moveCaretToLineEndOffset(editor, caret, operatorArguments.count1 - 1, allow).toMotion()
   }
 
   override fun postMove(editor: Editor, caret: Caret, context: DataContext, cmd: Command) {

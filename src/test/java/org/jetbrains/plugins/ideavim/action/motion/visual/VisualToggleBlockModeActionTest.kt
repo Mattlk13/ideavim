@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,12 @@
 
 package org.jetbrains.plugins.ideavim.action.motion.visual
 
+import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import org.jetbrains.plugins.ideavim.VimTestCase
 
 class VisualToggleBlockModeActionTest : VimTestCase() {
@@ -95,13 +98,12 @@ class VisualToggleBlockModeActionTest : VimTestCase() {
     )
   }
 
-/*
-[VERSION UPDATE] 203+
   fun `test on empty file`() {
-    doTest("<C-V>", "", "",
-      CommandState.Mode.VISUAL, CommandState.SubMode.VISUAL_BLOCK)
+    doTest(
+      "<C-V>", "", "",
+      CommandState.Mode.VISUAL, CommandState.SubMode.VISUAL_BLOCK
+    )
   }
-*/
 
   fun `test selectmode option`() {
     configureByText(
@@ -114,7 +116,7 @@ class VisualToggleBlockModeActionTest : VimTestCase() {
                     hard by the torrent of a mountain pass.
       """.trimIndent()
     )
-    OptionsManager.selectmode.set("cmd")
+    VimPlugin.getOptionService().setOptionValue(OptionService.Scope.GLOBAL, OptionConstants.selectmodeName, VimString("cmd"))
     typeText(parseKeys("<C-V>"))
     assertState(CommandState.Mode.SELECT, CommandState.SubMode.VISUAL_BLOCK)
   }

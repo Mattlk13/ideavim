@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,13 +33,18 @@ import com.maddyhome.idea.vim.helper.EditorHelper
 import com.maddyhome.idea.vim.helper.commandState
 import com.maddyhome.idea.vim.helper.exitVisualMode
 import com.maddyhome.idea.vim.helper.inVisualMode
+import com.maddyhome.idea.vim.helper.pushSelectMode
+import com.maddyhome.idea.vim.helper.pushVisualMode
 import com.maddyhome.idea.vim.helper.subMode
 import com.maddyhome.idea.vim.helper.vimForEachCaret
 import com.maddyhome.idea.vim.helper.vimLastColumn
 import com.maddyhome.idea.vim.helper.vimLastSelectionType
 import com.maddyhome.idea.vim.helper.vimLastVisualOperatorRange
 import com.maddyhome.idea.vim.helper.vimSelectionStart
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.newapi.vim
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 
 /**
  * @author Alex Plate
@@ -120,7 +125,7 @@ class VisualMotionGroup {
       if (rawCount > 0) {
         val primarySubMode = editor.caretModel.primaryCaret.vimLastVisualOperatorRange?.type?.toSubMode()
           ?: subMode
-        editor.commandState.pushModes(CommandState.Mode.VISUAL, primarySubMode)
+        editor.commandState.pushVisualMode(primarySubMode)
 
         editor.vimForEachCaret {
           val range = it.vimLastVisualOperatorRange ?: VisualChange.default(subMode)
@@ -133,7 +138,7 @@ class VisualMotionGroup {
           it.vimSetSelection(it.offset, end, true)
         }
       } else {
-        editor.commandState.pushModes(CommandState.Mode.VISUAL, subMode)
+        editor.commandState.pushVisualMode(subMode)
         editor.vimForEachCaret { it.vimSetSelection(it.offset) }
       }
       return true
@@ -183,7 +188,7 @@ class VisualMotionGroup {
         }
       }
     }
-    KeyHandler.getInstance().reset(editor)
+    KeyHandler.getInstance().reset(editor.vim)
   }
 
   /**
@@ -212,7 +217,7 @@ class VisualMotionGroup {
   }
 
   fun enterSelectMode(editor: Editor, subMode: CommandState.SubMode): Boolean {
-    editor.commandState.pushModes(CommandState.Mode.SELECT, subMode)
+    editor.commandState.pushSelectMode(subMode)
     editor.vimForEachCaret { it.vimSelectionStart = it.vimLeadSelectionOffset }
     return true
   }
@@ -250,7 +255,7 @@ class VisualMotionGroup {
     val selectionStartColumn = editor.offsetToLogicalPosition(selections.first().first).column
     val selectionStartLine = editor.offsetToLogicalPosition(selections.first().first).line
 
-    val maxColumn = selections.map { editor.offsetToLogicalPosition(it.second).column }.max() ?: return false
+    val maxColumn = selections.map { editor.offsetToLogicalPosition(it.second).column }.maxOrNull() ?: return false
     selections.forEachIndexed { i, it ->
       if (editor.offsetToLogicalPosition(it.first).line != editor.offsetToLogicalPosition(it.second).line) {
         return false
@@ -271,13 +276,14 @@ class VisualMotionGroup {
 
   private fun blockModeStartAndEnd(editor: Editor): Pair<Int, Int> {
     val selections = editor.caretModel.allCarets.map { it.selectionStart to it.selectionEnd }.sortedBy { it.first }
-    val maxColumn = selections.map { editor.offsetToLogicalPosition(it.second).column }.max() ?: error("No carets")
+    val maxColumn =
+      selections.map { editor.offsetToLogicalPosition(it.second).column }.maxOrNull() ?: error("No carets")
     val lastLine = editor.offsetToLogicalPosition(selections.last().first).line
     return selections.first().first to editor.logicalPositionToOffset(LogicalPosition(lastLine, maxColumn))
   }
 
   val exclusiveSelection: Boolean
-    get() = OptionsManager.selection.value == "exclusive"
+    get() = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.GLOBAL, OptionConstants.selectionName) as VimString).value == "exclusive"
   val selectionAdj: Int
     get() = if (exclusiveSelection) 0 else 1
 }

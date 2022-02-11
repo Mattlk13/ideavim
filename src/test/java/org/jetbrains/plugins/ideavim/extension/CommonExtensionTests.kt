@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,9 @@ package org.jetbrains.plugins.ideavim.extension
 
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.editor.Editor
+import com.intellij.testFramework.PlatformTestUtil
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.command.MappingMode
@@ -35,6 +37,8 @@ import com.maddyhome.idea.vim.extension.VimExtensionRegistrar
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
 import com.maddyhome.idea.vim.helper.isEndAllowed
+import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.option.ToggleOption
 import com.maddyhome.idea.vim.vimscript.Executor
 import com.maddyhome.idea.vim.vimscript.Executor.executingVimScript
 import junit.framework.TestCase
@@ -172,6 +176,33 @@ class OpMappingTest : VimTestCase() {
     typeText(parseKeys("Q"))
     assertState("I ${c}found it in a legendary land")
   }
+
+  @TestWithoutNeovim(SkipNeovimReason.PLUGIN)
+  fun `test delayed action`() {
+    configureByText("${c}I found it in a legendary land")
+    typeText(parseKeys("R"))
+    PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+    assertState("I fou${c}nd it in a legendary land")
+
+    typeText(parseKeys("dR"))
+    PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+    assertState("I fou${c} in a legendary land")
+  }
+
+  /**
+   * This test tests an intentionally incorrectly implemented action
+   */
+  @TestWithoutNeovim(SkipNeovimReason.PLUGIN)
+  fun `test delayed incorrect action`() {
+    configureByText("${c}I found it in a legendary land")
+    typeText(parseKeys("E"))
+    PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+    assertState("I fou${c}nd it in a legendary land")
+
+    typeText(parseKeys("dE"))
+    PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+    assertState("I found it${c} in a legendary land")
+  }
 }
 
 class PlugExtensionsTest : VimTestCase() {
@@ -263,6 +294,26 @@ class PlugMissingKeysTest : VimTestCase() {
     TestCase.assertEquals(parseKeys("L"), iKeyMappings.first().first)
   }
 
+  @TestWithoutNeovim(SkipNeovimReason.PLUGIN)
+  fun `test packadd`() {
+    assertFalse((OptionsManager.getOption("matchit") as ToggleOption).isSet)
+    executeLikeVimrc(
+      "packadd matchit",
+    )
+
+    assertTrue((OptionsManager.getOption("matchit") as ToggleOption).isSet)
+  }
+
+  @TestWithoutNeovim(SkipNeovimReason.PLUGIN)
+  fun `test packadd ex`() {
+    assertFalse((OptionsManager.getOption("matchit") as ToggleOption).isSet)
+    executeLikeVimrc(
+      "packadd! matchit",
+    )
+
+    assertTrue((OptionsManager.getOption("matchit") as ToggleOption).isSet)
+  }
+
   private fun executeLikeVimrc(vararg text: String) {
     executingVimScript = true
     Executor.execute(text.joinToString("\n"), false)
@@ -301,12 +352,16 @@ private class TestExtension : VimExtension {
     putExtensionHandlerMapping(MappingMode.O, parseKeys("<Plug>TestExtensionLinewise"), owner, MoveLinewise(), false)
     putExtensionHandlerMapping(MappingMode.N, parseKeys("<Plug>TestMotion"), owner, MoveLinewiseInNormal(), false)
     putExtensionHandlerMapping(MappingMode.N, parseKeys("<Plug>TestMissing"), owner, MoveLinewiseInNormal(), false)
+    putExtensionHandlerMapping(MappingMode.NO, parseKeys("<Plug>TestDelayed"), owner, DelayedAction(), false)
+    putExtensionHandlerMapping(MappingMode.NO, parseKeys("<Plug>TestIncorrectDelayed"), owner, DelayedIncorrectAction(), false)
 
     putKeyMapping(MappingMode.O, parseKeys("U"), owner, parseKeys("<Plug>TestExtensionEmulateInclusive"), true)
     putKeyMapping(MappingMode.O, parseKeys("P"), owner, parseKeys("<Plug>TestExtensionBackwardsCharacter"), true)
     putKeyMapping(MappingMode.O, parseKeys("I"), owner, parseKeys("<Plug>TestExtensionCharacter"), true)
     putKeyMapping(MappingMode.O, parseKeys("O"), owner, parseKeys("<Plug>TestExtensionLinewise"), true)
     putKeyMapping(MappingMode.N, parseKeys("Q"), owner, parseKeys("<Plug>TestMotion"), true)
+    putKeyMapping(MappingMode.NO, parseKeys("R"), owner, parseKeys("<Plug>TestDelayed"), true)
+    putKeyMapping(MappingMode.NO, parseKeys("E"), owner, parseKeys("<Plug>TestIncorrectDelayed"), true)
 
     putKeyMappingIfMissing(MappingMode.N, parseKeys("Z"), owner, parseKeys("<Plug>TestMissing"), true)
     putKeyMappingIfMissing(MappingMode.I, parseKeys("L"), owner, parseKeys("<Plug>TestMissing"), true)
@@ -352,6 +407,28 @@ private class TestExtension : VimExtension {
       val caret = editor.caretModel.currentCaret
       val newOffset = VimPlugin.getMotion().getOffsetOfHorizontalMotion(editor, caret, 1, true)
       MotionGroup.moveCaret(editor, caret, newOffset)
+    }
+  }
+
+  private class DelayedAction : VimExtensionHandler.WithCallback() {
+    override fun execute(editor: Editor, context: DataContext) {
+      invokeLater {
+        invokeLater {
+          editor.caretModel.allCarets.forEach { it.moveToOffset(it.offset + 5) }
+          continueVimExecution()
+        }
+      }
+    }
+  }
+
+  // This action should be registered with WithCallback, but we intentionally made it incorrectly for tests
+  private class DelayedIncorrectAction : VimExtensionHandler {
+    override fun execute(editor: Editor, context: DataContext) {
+      invokeLater {
+        invokeLater {
+          editor.caretModel.allCarets.forEach { it.moveToOffset(it.offset + 5) }
+        }
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2020 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -97,10 +97,14 @@ public class VimIndentObject implements VimExtension {
         this.includeBelow = includeBelow;
       }
 
+      @Nullable
       @Override
-      public @Nullable
-      TextRange getRange(@NotNull Editor editor, @NotNull Caret caret, @NotNull DataContext context,
-                         int count, int rawCount, @Nullable Argument argument) {
+      public TextRange getRange(@NotNull Editor editor,
+                                @NotNull Caret caret,
+                                @NotNull DataContext context,
+                                int count,
+                                int rawCount,
+                                @Nullable Argument argument) {
         final CharSequence charSequence = editor.getDocument().getCharsSequence();
         final int caretOffset = caret.getOffset();
 

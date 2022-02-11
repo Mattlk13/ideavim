@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.ex.ExException
 import com.maddyhome.idea.vim.vimscript.model.Executable
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDictionary
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimFuncref
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimList
@@ -42,10 +43,10 @@ data class AnonymousFunctionDeclaration(
   val hasOptionalArguments: Boolean,
 ) : Executable {
 
-  override lateinit var parent: Executable
+  override lateinit var vimContext: VimLContext
 
   override fun execute(editor: Editor, context: DataContext): ExecutionResult {
-    val container = sublist.expression.evaluate(editor, context, parent)
+    val container = sublist.expression.evaluate(editor, context, vimContext)
     if (container !is VimDictionary) {
       throw ExException("E1203: Dot can only be used on a dictionary")
     }
@@ -58,7 +59,9 @@ data class AnonymousFunctionDeclaration(
       }
     }
     val declaration = FunctionDeclaration(null, VimFuncref.anonymousCounter++.toString(), args, defaultArgs, body, replaceExisting, flags + FunctionFlag.DICT, hasOptionalArguments)
+    declaration.vimContext = this.vimContext
     container.dictionary[index] = VimFuncref(DefinedFunctionHandler(declaration), VimList(mutableListOf()), container, VimFuncref.Type.FUNCREF)
+    container.dictionary[index]
     return ExecutionResult.Success
   }
 }

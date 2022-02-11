@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@ import com.maddyhome.idea.vim.command.Command
 import com.maddyhome.idea.vim.command.CommandFlags
 import com.maddyhome.idea.vim.command.CommandFlags.FLAG_MULTIKEY_UNDO
 import com.maddyhome.idea.vim.command.CommandFlags.FLAG_NO_REPEAT_INSERT
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.handler.ChangeEditorActionHandler
 import com.maddyhome.idea.vim.helper.enumSetOf
 import java.util.*
@@ -40,13 +41,18 @@ class ChangeLineAction : ChangeEditorActionHandler.ForEachCaret() {
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Boolean {
     // `S` command is a synonym of `cc`
     val motion = MotionDownLess1FirstNonSpaceAction()
     val command = Command(1, motion, motion.type, motion.flags)
-    return VimPlugin.getChange().changeMotion(editor, caret, context, count, rawCount, Argument(command))
+    return VimPlugin.getChange().changeMotion(
+      editor,
+      caret,
+      context,
+      Argument(command),
+      operatorArguments
+    )
   }
 }

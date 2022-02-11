@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 
 package com.maddyhome.idea.vim.ex.vimscript;
 
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
@@ -26,6 +27,9 @@ import java.util.Map;
 /**
  * @author vlan
  */
+
+@Deprecated() // please use VariableService instead
+@ApiStatus.ScheduledForRemoval(inVersion = "1.12")
 public class VimScriptGlobalEnvironment {
   private static final VimScriptGlobalEnvironment ourInstance = new VimScriptGlobalEnvironment();
 

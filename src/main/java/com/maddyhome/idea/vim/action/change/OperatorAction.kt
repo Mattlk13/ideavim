@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +23,13 @@ import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.Command
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.command.SelectionType
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.handler.VimActionHandler
 import com.maddyhome.idea.vim.helper.MessageHelper
 import com.maddyhome.idea.vim.helper.commandState
+import com.maddyhome.idea.vim.newapi.vim
 
 /**
  * @author vlan
@@ -37,7 +39,7 @@ class OperatorAction : VimActionHandler.SingleExecution() {
 
   override val argumentType: Argument.Type = Argument.Type.MOTION
 
-  override fun execute(editor: Editor, context: DataContext, cmd: Command): Boolean {
+  override fun execute(editor: Editor, context: DataContext, cmd: Command, operatorArguments: OperatorArguments): Boolean {
     val operatorFunction = VimPlugin.getKey().operatorFunction
     if (operatorFunction != null) {
       val argument = cmd.argument
@@ -48,11 +50,17 @@ class OperatorAction : VimActionHandler.SingleExecution() {
         val saveRepeatHandler = VimRepeater.repeatHandler
         val motion = argument.motion
         val range = MotionGroup
-          .getMotionRange(editor, editor.caretModel.primaryCaret, context, cmd.count, cmd.rawCount, argument)
+          .getMotionRange(
+            editor,
+            editor.caretModel.primaryCaret,
+            context,
+            argument,
+            operatorArguments
+          )
         if (range != null) {
           VimPlugin.getMark().setChangeMarks(editor, range)
           val selectionType = if (motion.isLinewiseMotion()) SelectionType.LINE_WISE else SelectionType.CHARACTER_WISE
-          KeyHandler.getInstance().reset(editor)
+          KeyHandler.getInstance().reset(editor.vim)
           val result = operatorFunction.apply(editor, context, selectionType)
           VimRepeater.repeatHandler = saveRepeatHandler
           return result

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import com.google.common.collect.Multiset;
 import com.maddyhome.idea.vim.extension.VimExtensionHandler;
 import com.maddyhome.idea.vim.helper.StringHelper;
 import com.maddyhome.idea.vim.vimscript.model.Executable;
+import com.maddyhome.idea.vim.vimscript.model.VimLContext;
 import com.maddyhome.idea.vim.vimscript.model.expressions.Expression;
 import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
@@ -100,9 +101,8 @@ public class KeyMapping implements Iterable<List<KeyStroke>> {
                   @NotNull Expression toExpression,
                   @NotNull MappingOwner owner,
                   @NotNull String originalString,
-                  @NotNull Executable parent,
                   boolean recursive) {
-    myKeys.put(new ArrayList<>(fromKeys), new ToExpressionMappingInfo(toExpression, parent, fromKeys, recursive, owner, originalString));
+    myKeys.put(new ArrayList<>(fromKeys), new ToExpressionMappingInfo(toExpression, fromKeys, recursive, owner, originalString));
     fillPrefixes(fromKeys);
   }
 

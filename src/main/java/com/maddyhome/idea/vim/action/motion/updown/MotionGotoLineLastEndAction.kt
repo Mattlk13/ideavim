@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,13 +25,17 @@ import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.command.Argument
 import com.maddyhome.idea.vim.command.CommandFlags
 import com.maddyhome.idea.vim.command.MotionType
+import com.maddyhome.idea.vim.command.OperatorArguments
 import com.maddyhome.idea.vim.handler.Motion
 import com.maddyhome.idea.vim.handler.MotionActionHandler
 import com.maddyhome.idea.vim.handler.toMotion
 import com.maddyhome.idea.vim.helper.enumSetOf
 import com.maddyhome.idea.vim.helper.inInsertMode
 import com.maddyhome.idea.vim.helper.inVisualMode
-import com.maddyhome.idea.vim.option.OptionsManager
+import com.maddyhome.idea.vim.newapi.IjVimEditor
+import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import com.maddyhome.idea.vim.vimscript.services.OptionService
 import java.util.*
 
 class MotionGotoLineLastEndAction : MotionActionHandler.ForEachCaret() {
@@ -43,21 +47,20 @@ class MotionGotoLineLastEndAction : MotionActionHandler.ForEachCaret() {
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Motion {
     var allow = false
     if (editor.inInsertMode) {
       allow = true
     } else if (editor.inVisualMode) {
-      val opt = OptionsManager.selection
-      if (opt.value != "old") {
+      val opt = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.selectionName) as VimString).value
+      if (opt != "old") {
         allow = true
       }
     }
 
-    return VimPlugin.getMotion().moveCaretGotoLineLastEnd(editor, rawCount, count - 1, allow).toMotion()
+    return VimPlugin.getMotion().moveCaretGotoLineLastEnd(editor, operatorArguments.count0, operatorArguments.count1 - 1, allow).toMotion()
   }
 }
 
@@ -70,20 +73,19 @@ class MotionGotoLineLastEndInsertAction : MotionActionHandler.ForEachCaret() {
     editor: Editor,
     caret: Caret,
     context: DataContext,
-    count: Int,
-    rawCount: Int,
     argument: Argument?,
+    operatorArguments: OperatorArguments,
   ): Motion {
     var allow = false
     if (editor.inInsertMode) {
       allow = true
     } else if (editor.inVisualMode) {
-      val opt = OptionsManager.selection
-      if (opt.value != "old") {
+      val opt = (VimPlugin.getOptionService().getOptionValue(OptionService.Scope.LOCAL(IjVimEditor(editor)), OptionConstants.selectionName) as VimString).value
+      if (opt != "old") {
         allow = true
       }
     }
 
-    return VimPlugin.getMotion().moveCaretGotoLineLastEnd(editor, rawCount, count - 1, allow).toMotion()
+    return VimPlugin.getMotion().moveCaretGotoLineLastEnd(editor, operatorArguments.count0, operatorArguments.count1 - 1, allow).toMotion()
   }
 }

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,17 +22,16 @@ import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.ui.paint.PaintUtil;
 import com.intellij.util.ui.JBUI;
 import com.maddyhome.idea.vim.VimPlugin;
-import com.maddyhome.idea.vim.VimProjectService;
+import com.maddyhome.idea.vim.group.EditorHolderService;
 import com.maddyhome.idea.vim.group.HistoryGroup;
 import com.maddyhome.idea.vim.helper.UiHelper;
-import com.maddyhome.idea.vim.option.GuiCursorAttributes;
-import com.maddyhome.idea.vim.option.GuiCursorMode;
-import com.maddyhome.idea.vim.option.GuiCursorType;
-import com.maddyhome.idea.vim.option.OptionsManager;
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorAttributes;
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorMode;
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorOptionHelper;
+import com.maddyhome.idea.vim.vimscript.model.options.helpers.GuiCursorType;
 import kotlin.text.StringsKt;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -90,7 +89,7 @@ public class ExTextField extends JTextField {
 
   void deactivate() {
     clearCurrentAction();
-    editor = null;
+    EditorHolderService.getInstance().setEditor(null);
     context = null;
   }
 
@@ -229,24 +228,14 @@ public class ExTextField extends JTextField {
     return text == null ? "" : text;
   }
 
-  // I'm not sure how to deal with these dispose issues and deprecations
-  @SuppressWarnings("deprecation")
   void setEditor(@NotNull Editor editor, DataContext context) {
-    this.editor = editor;
     this.context = context;
-    String disposeKey = vimExTextFieldDisposeKey + editor.hashCode();
     Project project = editor.getProject();
-    if (Disposer.get(disposeKey) == null && project != null) {
-      VimProjectService parentDisposable = VimProjectService.getInstance(project);
-      Disposer.register(parentDisposable, () -> {
-        this.editor = null;
-        this.context = null;
-      }, disposeKey);
-    }
+    EditorHolderService.getInstance().setEditor(editor);
   }
 
   public Editor getEditor() {
-    return editor;
+    return EditorHolderService.getInstance().getEditor();
   }
 
   public DataContext getContext() {
@@ -326,7 +315,7 @@ public class ExTextField extends JTextField {
    */
   void cancel() {
     clearCurrentAction();
-    VimPlugin.getProcess().cancelExEntry(editor, true);
+    VimPlugin.getProcess().cancelExEntry(EditorHolderService.getInstance().getEditor(), true);
   }
 
   public void setCurrentAction(@NotNull MultiStepAction action, char pendingIndicator) {
@@ -417,15 +406,15 @@ public class ExTextField extends JTextField {
   // 'cr' command-line replace is hor20
   // see :help 'guicursor'
   private void setNormalModeCaret() {
-    caret.setAttributes(OptionsManager.INSTANCE.getGuicursor().getAttributes(GuiCursorMode.CMD_LINE));
+    caret.setAttributes(GuiCursorOptionHelper.INSTANCE.getAttributes(GuiCursorMode.CMD_LINE));
   }
 
   private void setInsertModeCaret() {
-    caret.setAttributes(OptionsManager.INSTANCE.getGuicursor().getAttributes(GuiCursorMode.CMD_LINE_INSERT));
+    caret.setAttributes(GuiCursorOptionHelper.INSTANCE.getAttributes(GuiCursorMode.CMD_LINE_INSERT));
   }
 
   private void setReplaceModeCaret() {
-    caret.setAttributes(OptionsManager.INSTANCE.getGuicursor().getAttributes(GuiCursorMode.CMD_LINE_REPLACE));
+    caret.setAttributes(GuiCursorOptionHelper.INSTANCE.getAttributes(GuiCursorMode.CMD_LINE_REPLACE));
   }
 
   private static class CommandLineCaret extends DefaultCaret {
@@ -538,16 +527,13 @@ public class ExTextField extends JTextField {
       }
     }
 
-    // [VERSION UPDATE] 203+ Use modelToView2D, which will return a float rect which positions the caret better
-    // Java 9+
-    @SuppressWarnings("deprecation")
     private @Nullable Rectangle2D modelToView(int dot) {
       if (dot > getComponent().getDocument().getLength()) {
         return null;
       }
 
       try {
-        return getComponent().getUI().modelToView(getComponent(), dot, getDotBias());
+        return getComponent().getUI().modelToView2D(getComponent(), dot, getDotBias());
       }
       catch (BadLocationException e) {
         return null;
@@ -561,11 +547,7 @@ public class ExTextField extends JTextField {
       double width;
       final Rectangle2D r = modelToView(getDot() + 1);
       if (r != null) {
-        // [VERSION UPDATE] 203+ Remove this +1. It's a fudge factor because we're working with integers
-        // When we use modelToView2D to get accurate measurements this won't be required. E.g. width can be 8.4, with a
-        // starting x of 8.4, which would put the right hand edge at 16.8. Because everything is rounded down, we get 16
-        // So we add one
-        width = r.getX() - dotX + 1;
+        width = r.getX() - dotX;
       }
       else {
         char c = ' ';
@@ -597,7 +579,6 @@ public class ExTextField extends JTextField {
     return String.format("%s %d", caret.mode, caret.thickness);
   }
 
-  private Editor editor;
   private DataContext context;
   private final CommandLineCaret caret;
   private String lastEntry;
@@ -608,6 +589,5 @@ public class ExTextField extends JTextField {
   private char currentActionPromptCharacter;
   private int currentActionPromptCharacterOffset = -1;
 
-  private static final String vimExTextFieldDisposeKey = "vimExTextFieldDisposeKey";
   private static final Logger logger = Logger.getInstance(ExTextField.class.getName());
 }

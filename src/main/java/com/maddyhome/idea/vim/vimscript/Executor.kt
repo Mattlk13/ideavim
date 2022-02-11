@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,9 +24,12 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.textarea.TextComponentEditorImpl
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.ex.ExException
+import com.maddyhome.idea.vim.ex.FinishException
 import com.maddyhome.idea.vim.group.HistoryGroup
 import com.maddyhome.idea.vim.group.RegisterGroup
+import com.maddyhome.idea.vim.vimscript.model.CommandLineVimLContext
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.commands.Command
 import com.maddyhome.idea.vim.vimscript.model.commands.RepeatCommand
 import com.maddyhome.idea.vim.vimscript.parser.VimscriptParser
@@ -38,12 +41,12 @@ object Executor {
   private val logger = logger<Executor>()
   var executingVimScript = false
 
-  @kotlin.jvm.Throws(ExException::class)
-  fun execute(scriptString: String, editor: Editor, context: DataContext, skipHistory: Boolean, indicateErrors: Boolean = true): ExecutionResult {
+  @Throws(ExException::class)
+  fun execute(scriptString: String, editor: Editor, context: DataContext, skipHistory: Boolean, indicateErrors: Boolean = true, vimContext: VimLContext? = null): ExecutionResult {
     var finalResult: ExecutionResult = ExecutionResult.Success
 
     val script = VimscriptParser.parse(scriptString)
-    script.units.forEach { it.parent = script }
+    script.units.forEach { it.vimContext = vimContext ?: script }
 
     for (unit in script.units) {
       try {
@@ -55,6 +58,9 @@ object Executor {
           }
         }
       } catch (e: ExException) {
+        if (e is FinishException) {
+          break
+        }
         finalResult = ExecutionResult.Error
         if (indicateErrors) {
           VimPlugin.showMessage(e.message)
@@ -85,23 +91,23 @@ object Executor {
   fun execute(scriptString: String, skipHistory: Boolean = true) {
     val editor = TextComponentEditorImpl(null, JTextArea())
     val context = DataContext.EMPTY_CONTEXT
-    execute(scriptString, editor, context, skipHistory)
+    execute(scriptString, editor, context, skipHistory, indicateErrors = true, CommandLineVimLContext)
   }
 
   @JvmStatic
-  fun executeFile(file: File) {
+  fun executeFile(file: File, indicateErrors: Boolean = false) {
     val editor = TextComponentEditorImpl(null, JTextArea())
     val context = DataContext.EMPTY_CONTEXT
     try {
-      execute(file.readText(), editor, context, skipHistory = true, indicateErrors = false)
+      execute(file.readText(), editor, context, skipHistory = true, indicateErrors)
     } catch (ignored: IOException) { }
   }
 
-  @kotlin.jvm.Throws(ExException::class)
+  @Throws(ExException::class)
   fun executeLastCommand(editor: Editor, context: DataContext): Boolean {
     val reg = VimPlugin.getRegister().getRegister(':') ?: return false
     val text = reg.text ?: return false
-    execute(text, editor, context, false)
+    execute(text, editor, context, skipHistory = false, indicateErrors = true, CommandLineVimLContext)
     return true
   }
 }

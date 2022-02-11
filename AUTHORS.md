@@ -372,6 +372,38 @@ Contributors:
   [![icon][github]](https://github.com/myzeiri)
   &nbsp;
   Martin Yzeiri
+* [![icon][mail]](mailto:jeyko1@gmail.com)
+  [![icon][github]](https://github.com/wrightwriter)
+  &nbsp;
+  Petar Guglev
+* [![icon][mail]](mailto:contact@chylex.com)
+  [![icon][github]](https://github.com/chylex)
+  &nbsp;
+  chylex
+* [![icon][mail]](mailto:daniel.egger@gmail.com)
+  [![icon][github]](https://github.com/DanEEStar)
+  &nbsp;
+  DanEEStar
+* [![icon][mail]](mailto:ksrbkevinsuen@gmail.com)
+  [![icon][github]](https://github.com/ksrb)
+  &nbsp;
+  Kevin Suen
+* [![icon][mail]](mailto:michael.schertenleib@inftec.ch)
+  [![icon][github]](https://github.com/cravay)
+  &nbsp;
+  Michael Schertenleib
+* [![icon][mail]](mailto:piotr@near.org)
+  [![icon][github]](https://github.com/pmnoxx)
+  &nbsp;
+  Piotr Mikulski
+* [![icon][mail]](mailto:lonrevip@gmail.com)
+  [![icon][github]](https://github.com/lonre)
+  &nbsp;
+  Lonre Wang
+* [![icon][mail]](mailto:AlexPl292@gmail.com)
+  [![icon][github]](https://github.com/AlexPl292)
+  &nbsp;
+  Alex Pláte
                         
 If you are a contributor and your name is not listed here, feel free to
 contact the maintainers.

@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.maddyhome.idea.vim.ex.ranges.Ranges
 import com.maddyhome.idea.vim.vimscript.Executor
+import com.maddyhome.idea.vim.vimscript.model.CommandLineVimLContext
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
 import java.io.File
 
@@ -33,7 +34,7 @@ data class SourceCommand(val ranges: Ranges, val argument: String) : Command.Sin
   override val argFlags = flags(RangeFlag.RANGE_FORBIDDEN, ArgumentFlag.ARGUMENT_REQUIRED, Access.READ_ONLY)
   override fun processCommand(editor: Editor, context: DataContext): ExecutionResult {
     val path = expandUser(argument.trim())
-    Executor.executeFile(File(path))
+    Executor.executeFile(File(path), vimContext.getFirstParentContext() is CommandLineVimLContext)
     return ExecutionResult.Success
   }
 

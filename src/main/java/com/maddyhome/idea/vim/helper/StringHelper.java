@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,9 +18,11 @@
 
 package com.maddyhome.idea.vim.helper;
 
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
+import com.maddyhome.idea.vim.VimPlugin;
+import com.maddyhome.idea.vim.group.RegisterGroup;
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
-import com.maddyhome.idea.vim.vimscript.services.VariableService;
 import org.apache.commons.codec.binary.Base64;
 import org.jdom.Element;
 import org.jetbrains.annotations.NonNls;
@@ -30,7 +32,6 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static java.awt.event.KeyEvent.*;
@@ -48,6 +49,8 @@ public class StringHelper {
   private static final int VK_PLUG = KeyEvent.CHAR_UNDEFINED - 1;
   public static final int VK_ACTION = KeyEvent.CHAR_UNDEFINED - 2;
 
+  private static final Logger logger = Logger.getInstance(RegisterGroup.class);
+
   private StringHelper() {}
 
   private static @Nullable String toEscapeNotation(@NotNull KeyStroke key) {
@@ -62,11 +65,21 @@ public class StringHelper {
   }
 
   public static @NotNull List<KeyStroke> stringToKeys(@NotNull @NonNls String s) {
-    // The following if is a dirty hack to finally support `let mapleader = "\<space>"`
-    if ("\\<SPACE>".equalsIgnoreCase(s)) return Collections.singletonList(getKeyStroke(' '));
     final List<KeyStroke> res = new ArrayList<>();
     for (int i = 0; i < s.length(); i++) {
-      res.add(getKeyStroke(s.charAt(i)));
+      char c = s.charAt(i);
+      if (isControlCharacter(c) && c != 10) {
+        if (c == 0) {
+          // J is a special case, it's keycode is 0 because keycode 10 is reserved by \n
+          res.add(getKeyStroke('J', CTRL_DOWN_MASK));
+        } else if (c == '\t') {
+          res.add(getKeyStroke('\t'));
+        } else {
+          res.add(getKeyStroke(c + 'A' - 1, CTRL_DOWN_MASK));
+        }
+      } else {
+        res.add(getKeyStroke(c));
+      }
     }
     return res;
   }
@@ -116,7 +129,7 @@ public class StringHelper {
             break;
           case ESCAPE:
             state = KeyParserState.INIT;
-            if (c != '\\' && c != '<') {
+            if (c != '\\') {
               result.add(getKeyStroke('\\'));
             }
             result.add(getKeyStroke(c));
@@ -138,7 +151,7 @@ public class StringHelper {
                 if (leader != null) {
                   result.addAll(leader);
                 }
-                else if (specialKey != null) {
+                else if (specialKey != null && specialKeyName.length() > 1) {
                   result.add(specialKey);
                 }
                 else {
@@ -165,9 +178,225 @@ public class StringHelper {
     return result;
   }
 
+  /**
+   * See ":h string"
+   * \...   three-digit octal number
+   * \..    two-digit octal number (must be followed by non-digit)
+   * \.     one-digit octal number (must be followed by non-digit)
+   * \x..   byte specified with two hex numbers (e.g., "\x1f")
+   * \x.    byte specified with one hex number (must be followed by non-hex char)
+   * \X..   same as \x..
+   * \X.    same as \x.
+   * \\u.... character specified with up to 4 hex numbers, stored as UTF-8
+   * \U.... same as \\u but allows up to 8 hex numbers
+   * \b     backspace
+   * \e     escape
+   * \f     formfeed
+   * \n     newline
+   * \r     return
+   * \t     tab
+   * \\     backslash
+   * \"     double quote
+   * \<xxx> special key named "xxx". e.g. "\<C-W>" for CTRL-W. This is for use in mapping, the 0x80 byte is escaped
+   *        to use double quote character is must be escaped:  "<M-\">".
+   *
+   * Note that "\000" and "\x00" force end of the string (same for \\u, \U etc)
+   *
+   * @param vimString
+   * @return
+   */
+  public static @NotNull String parseVimString(@NotNull String vimString) {
+    StringBuilder result = new StringBuilder();
+    VimStringState state = VimStringState.INIT;
+    StringBuilder specialKeyBuilder = null;
+    int digitsLeft = 0;
+    int number = 0;
+    String vimStringWithForceEnd = vimString + (char) 0;
+    int i = 0;
+    while (i < vimStringWithForceEnd.length()) {
+      char c = vimStringWithForceEnd.charAt(i);
+      switch (state) {
+        case INIT:
+          if (c == '\\') {
+            state = VimStringState.ESCAPE;
+          } else if (c == 0) {
+            i = vimStringWithForceEnd.length();
+          } else {
+            result.append(c);
+          }
+          break;
+        case ESCAPE:
+          if (octalDigitToNumber(c) != null) {
+            number = octalDigitToNumber(c);
+            digitsLeft = 2;
+            state = VimStringState.OCTAL_NUMBER;
+          } else if (Character.toLowerCase(c) == 'x') {
+            digitsLeft = 2;
+            state = VimStringState.HEX_NUMBER;
+          } else if (c == 'u') {
+            digitsLeft = 4;
+            state = VimStringState.HEX_NUMBER;
+          } else if (c == 'U') {
+            digitsLeft = 8;
+            state = VimStringState.HEX_NUMBER;
+          } else if (c == 'b')  {
+            result.append((char) 8);
+            state = VimStringState.INIT;
+          } else if (c == 'e') {
+            result.append((char) 27);
+            state = VimStringState.INIT;
+          } else if (c == 'f') {
+            result.append((char) 12);
+            state = VimStringState.INIT;
+          } else if (c == 'n') {
+            result.append('\n');
+            state = VimStringState.INIT;
+          } else if (c == 'r') {
+            result.append('\r');
+            state = VimStringState.INIT;
+          } else if (c == 't') {
+            result.append('\t');
+            state = VimStringState.INIT;
+          } else if (c == '\\') {
+            result.append('\\');
+            state = VimStringState.INIT;
+          } else if (c == '"') {
+            result.append('"');
+            state = VimStringState.INIT;
+          } else if (c == '<') {
+            state = VimStringState.SPECIAL;
+            specialKeyBuilder = new StringBuilder();
+          } else if (c == 0) {
+            i = vimStringWithForceEnd.length(); // force end of the string
+          } else {
+            result.append(c);
+            state = VimStringState.INIT;
+          }
+          break;
+        case OCTAL_NUMBER:
+          Integer value = octalDigitToNumber(c);
+          if (value != null) {
+            digitsLeft -= 1;
+            number = number * 8 + value;
+
+            if (digitsLeft == 0 || i == vimStringWithForceEnd.length() - 1) {
+              if (number != 0) {
+                result.append((char)number);
+              } else {
+                i = vimStringWithForceEnd.length();
+              }
+              number = 0;
+              state = VimStringState.INIT;
+            }
+          } else {
+            if (number != 0) {
+              result.append((char)number);
+            } else {
+              i = vimStringWithForceEnd.length();
+            }
+            number = 0;
+            digitsLeft = 0;
+            state = VimStringState.INIT;
+            i -= 1;
+          }
+          break;
+        case HEX_NUMBER:
+          Integer val = hexDigitToNumber(c);
+          if (val == null) {
+            // if there was at least one number after '\', append number, otherwise - append letter after '\'
+            if (vimStringWithForceEnd.charAt(i - 2) == '\\') {
+              result.append(vimStringWithForceEnd.charAt(i - 1));
+            } else {
+              if (number != 0) {
+                result.append((char)number);
+              } else {
+                i = vimStringWithForceEnd.length();
+              }
+            }
+            number = 0;
+            digitsLeft = 0;
+            state = VimStringState.INIT;
+            i -= 1;
+          } else {
+            number = number * 16 + val;
+            digitsLeft -= 1;
+            if (digitsLeft == 0 || i == vimStringWithForceEnd.length() - 1) {
+              if (number != 0) {
+                result.append((char)number);
+              } else {
+                i = vimStringWithForceEnd.length();
+              }
+              number = 0;
+              state = VimStringState.INIT;
+            }
+          }
+          break;
+        case SPECIAL:
+          if (c == 0) {
+            result.append(specialKeyBuilder);
+          }
+          if (c == '>') {
+            KeyStroke specialKey = parseSpecialKey(specialKeyBuilder.toString(), 0);
+            if (specialKey != null) {
+              int keyCode = specialKey.getKeyCode();
+              if (specialKey.getKeyCode() == 0) {
+                keyCode = specialKey.getKeyChar();
+              } else if ((specialKey.getModifiers() & CTRL_DOWN_MASK) == CTRL_DOWN_MASK) {
+                if (specialKey.getKeyCode() == 'J') {
+                  // 'J' is a special case, keycode 10 is \n char
+                  keyCode = 0;
+                } else {
+                  keyCode = specialKey.getKeyCode() - 'A' + 1;
+                }
+              }
+              result.append((char) keyCode);
+            } else {
+              result.append("<").append(specialKeyBuilder).append(">");
+            }
+            specialKeyBuilder = new StringBuilder();
+            state = VimStringState.INIT;
+          } else if (c == 0) {
+            result.append("<").append(specialKeyBuilder);
+            state = VimStringState.INIT;
+          } else {
+            specialKeyBuilder.append(c);
+          }
+          break;
+      }
+      i += 1;
+    }
+    return result.toString();
+  }
+
+  private enum VimStringState {
+    INIT,
+    ESCAPE,
+    OCTAL_NUMBER,
+    HEX_NUMBER,
+    SPECIAL
+  }
+
+  private static Integer octalDigitToNumber(char c) {
+    if (c >= '0' && c <= '7') {
+      return c - '0';
+    }
+    return null;
+  }
+
+
+  private static Integer hexDigitToNumber(char c) {
+    char lowerChar = Character.toLowerCase(c);
+    if (Character.isDigit(lowerChar)) {
+      return lowerChar - '0';
+    } else if (lowerChar >= 'a' && lowerChar <= 'f') {
+      return lowerChar - 'a' + 10;
+    }
+    return null;
+  }
+
   private static @Nullable List<KeyStroke> parseMapLeader(@NotNull String s) {
     if ("leader".equalsIgnoreCase(s)) {
-      final Object mapLeader = VariableService.INSTANCE.getGlobalVariable("mapleader");
+      final Object mapLeader = VimPlugin.getVariableService().getGlobalVariableValue("mapleader");
       if (mapLeader instanceof VimString) {
         return stringToKeys(((VimString)mapLeader).getValue());
       }
@@ -184,6 +413,34 @@ public class StringHelper {
 
   private static boolean isControlKeyCode(@NotNull KeyStroke key) {
     return key.getKeyChar() == CHAR_UNDEFINED && key.getKeyCode() < 0x20 && key.getModifiers() == 0;
+  }
+
+  public static @NotNull String toKeyCodedString(@NotNull List<KeyStroke> keys) {
+    final StringBuilder builder = new StringBuilder();
+    for (KeyStroke key : keys) {
+      Character keyAsChar = keyStrokeToChar(key);
+      if (keyAsChar != null) {
+        builder.append(keyAsChar);
+      } else {
+        logger.error("Unknown key " + key);
+      }
+    }
+    return builder.toString();
+  }
+
+  private static Character keyStrokeToChar(@NotNull KeyStroke key) {
+    if (key.getKeyChar() != CHAR_UNDEFINED) {
+      return key.getKeyChar();
+    } else if ((key.getModifiers() & CTRL_DOWN_MASK) == CTRL_DOWN_MASK) {
+      if (key.getKeyCode() == 'J') {
+        // 'J' is a special case, keycode 10 is \n char
+        return (char)0;
+      }
+      else {
+        return (char)(key.getKeyCode() - 'A' + 1);
+      }
+    }
+    return (char) key.getKeyCode();
   }
 
   public static @NotNull String toKeyNotation(@NotNull List<KeyStroke> keys) {

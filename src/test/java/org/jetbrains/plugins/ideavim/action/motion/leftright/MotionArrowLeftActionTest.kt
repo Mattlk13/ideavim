@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,16 +22,16 @@ package org.jetbrains.plugins.ideavim.action.motion.leftright
 
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper.parseKeys
-import com.maddyhome.idea.vim.option.KeyModelOptionData
+import com.maddyhome.idea.vim.vimscript.services.OptionConstants
+import org.jetbrains.plugins.ideavim.OptionValueType
 import org.jetbrains.plugins.ideavim.SkipNeovimReason
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim
 import org.jetbrains.plugins.ideavim.VimOptionDefaultAll
 import org.jetbrains.plugins.ideavim.VimOptionTestCase
 import org.jetbrains.plugins.ideavim.VimOptionTestConfiguration
 import org.jetbrains.plugins.ideavim.VimTestOption
-import org.jetbrains.plugins.ideavim.VimTestOptionType
 
-class MotionArrowLeftActionTest : VimOptionTestCase(KeyModelOptionData.name) {
+class MotionArrowLeftActionTest : VimOptionTestCase(OptionConstants.keymodelName) {
 
   // Kotlin type hints should be an obvious example of an inlay related to preceding text, but they are actually
   // related to following (KTIJ-3768). The inline rename options inlay is a better example
@@ -263,9 +263,9 @@ class MotionArrowLeftActionTest : VimOptionTestCase(KeyModelOptionData.name) {
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
     VimTestOption(
-      KeyModelOptionData.name,
-      VimTestOptionType.LIST,
-      [KeyModelOptionData.stopsel]
+      OptionConstants.keymodelName,
+      OptionValueType.STRING,
+      OptionConstants.keymodel_stopsel
     )
   )
   fun `test visual stopsel`() {
@@ -294,9 +294,9 @@ class MotionArrowLeftActionTest : VimOptionTestCase(KeyModelOptionData.name) {
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
     VimTestOption(
-      KeyModelOptionData.name,
-      VimTestOptionType.LIST,
-      [KeyModelOptionData.stopselect]
+      OptionConstants.keymodelName,
+      OptionValueType.STRING,
+      OptionConstants.keymodel_stopselect
     )
   )
   fun `test visual stopselect`() {
@@ -325,9 +325,9 @@ class MotionArrowLeftActionTest : VimOptionTestCase(KeyModelOptionData.name) {
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
     VimTestOption(
-      KeyModelOptionData.name,
-      VimTestOptionType.LIST,
-      [KeyModelOptionData.stopvisual]
+      OptionConstants.keymodelName,
+      OptionValueType.STRING,
+      OptionConstants.keymodel_stopvisual
     )
   )
   fun `test visual stopvisual`() {
@@ -356,9 +356,9 @@ class MotionArrowLeftActionTest : VimOptionTestCase(KeyModelOptionData.name) {
   @TestWithoutNeovim(SkipNeovimReason.OPTION)
   @VimOptionTestConfiguration(
     VimTestOption(
-      KeyModelOptionData.name,
-      VimTestOptionType.LIST,
-      [KeyModelOptionData.stopvisual]
+      OptionConstants.keymodelName,
+      OptionValueType.STRING,
+      OptionConstants.keymodel_stopvisual
     )
   )
   fun `test visual stopvisual multicaret`() {

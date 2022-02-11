@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -87,6 +87,9 @@ sealed class ShortcutOwnerInfo {
         CommandState.Mode.CMD_LINE -> this.normal
         CommandState.Mode.OP_PENDING -> this.normal
         CommandState.Mode.REPLACE -> this.insert
+        CommandState.Mode.INSERT_NORMAL -> this.normal
+        CommandState.Mode.INSERT_VISUAL -> this.visual
+        CommandState.Mode.INSERT_SELECT -> this.select
       }
     }
   }
@@ -98,6 +101,7 @@ sealed class ShortcutOwnerInfo {
     val allIde = AllModes(ShortcutOwner.IDE)
 
     val allPerModeVim = PerMode(ShortcutOwner.VIM, ShortcutOwner.VIM, ShortcutOwner.VIM, ShortcutOwner.VIM)
+    val allPerModeIde = PerMode(ShortcutOwner.IDE, ShortcutOwner.IDE, ShortcutOwner.IDE, ShortcutOwner.IDE)
 
     private val wights = mapOf(
       "a" to 0,

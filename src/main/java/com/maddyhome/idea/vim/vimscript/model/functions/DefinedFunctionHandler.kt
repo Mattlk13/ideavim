@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,10 +24,11 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.LogicalPosition
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.ex.ExException
+import com.maddyhome.idea.vim.ex.FinishException
 import com.maddyhome.idea.vim.ex.ranges.LineNumberRange
 import com.maddyhome.idea.vim.ex.ranges.Ranges
-import com.maddyhome.idea.vim.vimscript.model.Executable
 import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
+import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimDataType
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimInt
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimList
@@ -36,7 +37,6 @@ import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
 import com.maddyhome.idea.vim.vimscript.model.expressions.Variable
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionDeclaration
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionFlag
-import com.maddyhome.idea.vim.vimscript.services.VariableService
 
 data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionHandler() {
 
@@ -46,10 +46,10 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
   override val minimumNumberOfArguments = function.args.size
   override val maximumNumberOfArguments get() = if (function.hasOptionalArguments) null else function.args.size + function.defaultArgs.size
 
-  override fun doFunction(argumentValues: List<Expression>, editor: Editor, context: DataContext, parent: Executable): VimDataType {
+  override fun doFunction(argumentValues: List<Expression>, editor: Editor, context: DataContext, vimContext: VimLContext): VimDataType {
     var returnValue: VimDataType? = null
     val exceptionsCaught = mutableListOf<ExException>()
-    val isRangeGiven = (ranges?.rangesCount ?: 0) > 0
+    val isRangeGiven = (ranges?.size() ?: 0) > 0
 
     if (!isRangeGiven) {
       val currentLine = editor.caretModel.currentCaret.logicalPosition.line
@@ -64,11 +64,11 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
     initializeFunctionVariables(argumentValues, editor, context)
 
     if (function.flags.contains(FunctionFlag.RANGE)) {
-      val line = (VariableService.getNonNullVariableValue(Variable(Scope.FUNCTION_VARIABLE, "firstline"), editor, context, function) as VimInt).value
+      val line = (VimPlugin.getVariableService().getNonNullVariableValue(Variable(Scope.FUNCTION_VARIABLE, "firstline"), editor, context, function) as VimInt).value
       returnValue = executeBodyForLine(line, isRangeGiven, exceptionsCaught, editor, context)
     } else {
-      val firstLine = (VariableService.getNonNullVariableValue(Variable(Scope.FUNCTION_VARIABLE, "firstline"), editor, context, function) as VimInt).value
-      val lastLine = (VariableService.getNonNullVariableValue(Variable(Scope.FUNCTION_VARIABLE, "lastline"), editor, context, function) as VimInt).value
+      val firstLine = (VimPlugin.getVariableService().getNonNullVariableValue(Variable(Scope.FUNCTION_VARIABLE, "firstline"), editor, context, function) as VimInt).value
+      val lastLine = (VimPlugin.getVariableService().getNonNullVariableValue(Variable(Scope.FUNCTION_VARIABLE, "lastline"), editor, context, function) as VimInt).value
       for (line in firstLine..lastLine) {
         returnValue = executeBodyForLine(line, isRangeGiven, exceptionsCaught, editor, context)
       }
@@ -89,7 +89,7 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
     var result: ExecutionResult = ExecutionResult.Success
     if (function.flags.contains(FunctionFlag.ABORT)) {
       for (statement in function.body) {
-        statement.parent = function
+        statement.vimContext = function
         if (result is ExecutionResult.Success) {
           result = statement.execute(editor, context)
         }
@@ -105,7 +105,7 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
     } else {
       // todo in release 1.9. in this case multiple exceptions can be thrown at once but we don't support it
       for (statement in function.body) {
-        statement.parent = function
+        statement.vimContext = function
         try {
           result = statement.execute(editor, context)
           when (result) {
@@ -119,6 +119,10 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
             is ExecutionResult.Success -> {}
           }
         } catch (e: ExException) {
+          if (e is FinishException) {
+            // todo in 1.9: also throw all caught exceptions
+            throw FinishException()
+          }
           exceptionsCaught.add(e)
           logger.warn("Caught exception during execution of function with [abort] flag. Exception: ${e.message}")
         }
@@ -130,9 +134,9 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
   private fun initializeFunctionVariables(argumentValues: List<Expression>, editor: Editor, context: DataContext) {
     // non-optional function arguments
     for ((index, name) in function.args.withIndex()) {
-      VariableService.storeVariable(
+      VimPlugin.getVariableService().storeVariable(
         Variable(Scope.FUNCTION_VARIABLE, name),
-        argumentValues[index].evaluate(editor, context, function),
+        argumentValues[index].evaluate(editor, context, function.vimContext),
         editor,
         context,
         function
@@ -141,9 +145,9 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
     // optional function arguments with default values
     for (index in 0 until function.defaultArgs.size) {
       val expressionToStore = if (index + function.args.size < argumentValues.size) argumentValues[index + function.args.size] else function.defaultArgs[index].second
-      VariableService.storeVariable(
+      VimPlugin.getVariableService().storeVariable(
         Variable(Scope.FUNCTION_VARIABLE, function.defaultArgs[index].first),
-        expressionToStore.evaluate(editor, context, function),
+        expressionToStore.evaluate(editor, context, function.vimContext),
         editor,
         context,
         function
@@ -154,12 +158,12 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
       val remainingArgs = if (function.args.size + function.defaultArgs.size < argumentValues.size) {
         VimList(
           argumentValues.subList(function.args.size + function.defaultArgs.size, argumentValues.size)
-            .map { it.evaluate(editor, context, function) }.toMutableList()
+            .map { it.evaluate(editor, context, function.vimContext) }.toMutableList()
         )
       } else {
         VimList(mutableListOf())
       }
-      VariableService.storeVariable(
+      VimPlugin.getVariableService().storeVariable(
         Variable(Scope.FUNCTION_VARIABLE, "000"),
         remainingArgs,
         editor,
@@ -167,11 +171,11 @@ data class DefinedFunctionHandler(val function: FunctionDeclaration) : FunctionH
         function
       )
     }
-    VariableService.storeVariable(
+    VimPlugin.getVariableService().storeVariable(
       Variable(Scope.FUNCTION_VARIABLE, "firstline"),
       VimInt(ranges!!.getFirstLine(editor, editor.caretModel.currentCaret) + 1), editor, context, function
     )
-    VariableService.storeVariable(
+    VimPlugin.getVariableService().storeVariable(
       Variable(Scope.FUNCTION_VARIABLE, "lastline"),
       VimInt(ranges!!.getLine(editor, editor.caretModel.currentCaret) + 1), editor, context, function
     )

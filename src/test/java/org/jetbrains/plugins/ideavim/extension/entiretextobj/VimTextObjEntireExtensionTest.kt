@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@ package org.jetbrains.plugins.ideavim.extension.entiretextobj
 
 import com.maddyhome.idea.vim.command.CommandState
 import com.maddyhome.idea.vim.helper.StringHelper
+import com.maddyhome.idea.vim.helper.VimBehaviorDiffers
+import com.maddyhome.idea.vim.helper.experimentalApi
 import org.jetbrains.plugins.ideavim.JavaVimTestCase
 
 /**
@@ -100,12 +102,21 @@ class VimTextObjEntireExtensionTest : JavaVimTestCase() {
     assertSelection(null)
   }
 
+  @VimBehaviorDiffers(
+    originalVimAfter =
+    "\n  \n \n<caret>\n\n  \n \n",
+    description = "Our code changes the motion type to linewise, but it should not"
+  )
   // |d| |ae|
   fun testDeleteEntireBufferIgnoreLeadingTrailing() {
     doTest(
       StringHelper.parseKeys("die"),
       "\n  \n \n${poem}\n  \n \n",
-      "\n  \n \n<caret>\n\n  \n \n"
+      if (experimentalApi()) {
+        "\n  \n \n<caret>\n  \n \n"
+      } else {
+        "\n  \n \n<caret>\n\n  \n \n"
+      }
     ) // additional \n because poem ends with a \n
     assertMode(CommandState.Mode.COMMAND)
     assertSelection(null)

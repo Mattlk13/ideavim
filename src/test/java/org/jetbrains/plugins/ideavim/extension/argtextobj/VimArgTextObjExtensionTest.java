@@ -1,6 +1,6 @@
 /*
  * IdeaVim - Vim emulator for IDEs based on the IntelliJ platform
- * Copyright (C) 2003-2021 The IdeaVim authors
+ * Copyright (C) 2003-2022 The IdeaVim authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,10 +19,11 @@
 package org.jetbrains.plugins.ideavim.extension.argtextobj;
 
 import com.google.common.collect.Lists;
+import com.maddyhome.idea.vim.VimPlugin;
 import com.maddyhome.idea.vim.command.CommandState;
 import com.maddyhome.idea.vim.helper.VimBehaviorDiffers;
+import com.maddyhome.idea.vim.vimscript.Executor;
 import com.maddyhome.idea.vim.vimscript.model.datatypes.VimString;
-import com.maddyhome.idea.vim.vimscript.services.VariableService;
 import org.jetbrains.plugins.ideavim.SkipNeovimReason;
 import org.jetbrains.plugins.ideavim.TestWithoutNeovim;
 import org.jetbrains.plugins.ideavim.VimTestCase;
@@ -39,7 +40,7 @@ public class VimArgTextObjExtensionTest extends VimTestCase {
   }
 
   private void setArgTextObjPairsVariable(String value) {
-    VariableService.INSTANCE.storeGlobalVariable("argtextobj_pairs", new VimString(value));
+    Executor.INSTANCE.execute("let argtextobj_pairs='" + value + "'", true);
   }
 
   @TestWithoutNeovim(reason = SkipNeovimReason.PLUGIN)
